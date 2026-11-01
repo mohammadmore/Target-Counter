@@ -1,19 +1,28 @@
-import { useEffect } from 'react';
-import { Check, RotateCcw } from 'lucide-react';
+import { Suspense, useEffect, useState } from 'react';
+import { AlertTriangle, Check, Copy, Info, RotateCcw, Wand2 } from 'lucide-react';
 import type { GoalConfig, GoalTexts, Lang, VizType } from '../goal/types';
 import { DEFAULT_TEXTS, FONTS, LANG_NAMES, PALETTES, PALETTE_FIELDS, TEXT_FIELDS } from '../goal/presets';
 import { BUILTIN_BACKGROUNDS, loadFontById, themeStyle } from '../goal/theme';
-import { LANGS, dirOf, formatNumber, parseWholeNumber } from '../lib/format';
+import { LANGS, dirOf, formatNumber } from '../lib/format';
+import { contrastIssues, fixContrast, paletteLabel, untranslatedFields } from '../goal/quality';
+import NumberInput from '../components/NumberInput';
+import { goalUrl } from '../router';
 import { MAX_VALUE } from '../config';
 import { VISUALIZATIONS } from '../viz';
-import { ColorInput, Field, Section, Segmented, Toggle, UploadField, inputClass } from './ui';
+import { ColorInput, Field, Section, Segmented, Toggle, UploadField, buttonClass, inputClass } from './ui';
 
 export interface Draft {
   config: GoalConfig;
   slug: string;
   originalSlug: string | null;
-  targetText: string;
-  scoreText: string;
+  target: number | null;
+  score: number | null;
+  /** The score as loaded from the server; only sent back if the admin changed it. */
+  baseScore: number;
+  scoreTouched: boolean;
+  published: boolean;
+  hasDraft: boolean;
+  draftToken: string | null;
   editorPassword: string;
   removeEditorPassword: boolean;
   hasEditorPassword: boolean;
@@ -30,8 +39,7 @@ export const SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,46}[a-z0-9])?$/;
 
 export function validateBasics(d: Draft) {
   const errors: Partial<Record<'name' | 'slug' | 'target' | 'score', string>> = {};
-  const target = parseWholeNumber(d.targetText);
-  const score = parseWholeNumber(d.scoreText);
+  const { target, score } = d;
   if (!d.config.name.trim()) errors.name = 'یک نام برای این صفحه بنویسید.';
   if (!SLUG_PATTERN.test(d.slug)) errors.slug = 'فقط حروف کوچک انگلیسی، عدد و خط تیره (حداقل ۱ و حداکثر ۴۸ کاراکتر).';
   if (target === null || target < 1 || target > MAX_VALUE) errors.target = 'هدف باید یک عدد صحیح بزرگ‌تر از صفر باشد.';
@@ -45,9 +53,8 @@ export function validateBasics(d: Draft) {
 // ---------------------------------------------------------------------------
 export function BasicsStep({ draft, setDraft, patch }: StepProps) {
   const errors = validateBasics(draft);
-  const target = parseWholeNumber(draft.targetText);
-  const score = parseWholeNumber(draft.scoreText);
   const { config } = draft;
+  const renaming = !!draft.originalSlug && draft.published && draft.slug !== draft.originalSlug;
 
   const toggleLang = (lang: Lang) =>
     patch((c) => {
@@ -64,11 +71,15 @@ export function BasicsStep({ draft, setDraft, patch }: StepProps) {
           <input className={inputClass} value={config.name} onChange={(e) => patch((c) => void (c.name = e.target.value))} placeholder="مثلاً فروش فصل پاییز" />
         </Field>
         <div className="grid sm:grid-cols-2 gap-4">
-          <Field label="عدد هدف" error={errors.target} hint={target ? `${formatNumber(target, 'fa')}` : undefined}>
-            <input className={inputClass} inputMode="numeric" dir="ltr" value={draft.targetText} onChange={(e) => setDraft((d) => ({ ...d, targetText: e.target.value }))} />
+          <Field label="عدد هدف" error={errors.target}>
+            <NumberInput className={inputClass} lang="fa" value={draft.target} onChange={(v) => setDraft((d) => ({ ...d, target: v }))} />
           </Field>
-          <Field label={draft.originalSlug ? 'مقدار فعلی' : 'مقدار شروع'} error={errors.score} hint={score !== null ? formatNumber(score, 'fa') : undefined}>
-            <input className={inputClass} inputMode="numeric" dir="ltr" value={draft.scoreText} onChange={(e) => setDraft((d) => ({ ...d, scoreText: e.target.value }))} />
+          <Field
+            label={draft.originalSlug ? 'مقدار فعلی' : 'مقدار شروع'}
+            error={errors.score}
+            hint={draft.originalSlug ? 'ثبت روزانه را از «ثبت امتیاز» انجام دهید؛ این فیلد فقط برای اصلاح دستی است.' : undefined}
+          >
+            <NumberInput className={inputClass} lang="fa" value={draft.score} onChange={(v) => setDraft((d) => ({ ...d, score: v, scoreTouched: true }))} />
           </Field>
         </div>
       </Section>
@@ -84,6 +95,12 @@ export function BasicsStep({ draft, setDraft, patch }: StepProps) {
             />
           </div>
         </Field>
+        {renaming && (
+          <p className="flex gap-2 text-xs text-sky-200 bg-sky-500/10 border border-sky-500/30 rounded-lg p-2.5 leading-relaxed">
+            <Info size={14} className="shrink-0 mt-0.5" />
+            لینک قبلی (<span dir="ltr" className="font-mono">?g={draft.originalSlug}</span>) بعد از ذخیره هم کار می‌کند و خودکار به آدرس جدید می‌رود.
+          </p>
+        )}
       </Section>
 
       <Section title="زبان‌ها" description="برای هر زبانِ فعال، متن‌های جداگانه می‌نویسید. بازدیدکننده می‌تواند بین زبان‌ها جابه‌جا شود.">
@@ -120,7 +137,7 @@ export function StyleStep({ draft, patch }: StepProps) {
   const { config } = draft;
   const selected = VISUALIZATIONS.find((v) => v.id === config.visualization.type)!;
   const lang = config.defaultLang;
-  const sampleTarget = parseWholeNumber(draft.targetText) || 1_000_000;
+  const sampleTarget = draft.target || 1_000_000;
 
   return (
     <div className="space-y-4">
@@ -143,7 +160,9 @@ export function StyleStep({ draft, patch }: StepProps) {
               <div style={themeStyle(config)} dir={dirOf(lang)} className="relative h-[150px] bg-bg text-text font-goal overflow-hidden pointer-events-none">
                 <div className="absolute inset-0 bg-glow opacity-80" />
                 <div className="absolute left-1/2 top-1/2 w-[380px]" style={{ transform: 'translate(-50%, -50%) scale(0.46)' }}>
-                  <Viz compact score={sampleTarget * 0.62} target={sampleTarget} ratio={0.62} lang={lang} config={config} label={config.texts[lang].vizLabel} />
+                  <Suspense fallback={null}>
+                    <Viz compact score={sampleTarget * 0.62} target={sampleTarget} ratio={0.62} lang={lang} config={config} label={config.texts[lang].vizLabel} />
+                  </Suspense>
                 </div>
               </div>
               <div className="p-3 bg-zinc-900/60">
@@ -250,6 +269,8 @@ export function AppearanceStep({ draft, patch, token }: StepProps) {
           ))}
         </div>
       </Section>
+
+      <ContrastWarnings config={config} patch={patch} />
 
       <Section title="فونت" description="همه‌ی فونت‌ها روی سرور خودتان میزبانی می‌شوند و فقط فونت انتخاب‌شده برای بازدیدکننده دانلود می‌شود.">
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
@@ -362,11 +383,25 @@ export function TextsStep({ draft, patch, lang, setLang }: StepProps & { lang: L
   const activeLang = config.languages.includes(lang) ? lang : config.defaultLang;
   const texts = config.texts[activeLang];
   const set = (key: keyof GoalTexts, value: string) => patch((c) => void (c.texts[activeLang][key] = value));
+  const missing = untranslatedFields(config, activeLang);
 
   return (
     <div className="space-y-4">
       {config.languages.length > 1 && (
-        <Segmented value={activeLang} options={config.languages.map((l) => ({ value: l, label: LANG_NAMES[l] }))} onChange={setLang} />
+        <Segmented
+          value={activeLang}
+          options={config.languages.map((l) => {
+            const n = untranslatedFields(config, l).length;
+            return { value: l, label: n ? `${LANG_NAMES[l]} ⚠ ${n.toLocaleString('fa-IR')}` : LANG_NAMES[l] };
+          })}
+          onChange={setLang}
+        />
+      )}
+      {missing.length > 0 && (
+        <p className="flex gap-2 text-xs text-amber-200 bg-amber-400/10 border border-amber-400/30 rounded-lg p-2.5 leading-relaxed">
+          <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+          {missing.length.toLocaleString('fa-IR')} متنِ این زبان هنوز متن پیش‌فرض است، در حالی که در زبان دیگر نوشته شده. اگر منتشر شود، بازدیدکنندگان این زبان متن عمومی می‌بینند.
+        </p>
       )}
       <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-3 text-xs text-zinc-400 leading-relaxed">
         در متن‌ها می‌توانید از این جای‌گذارها استفاده کنید تا با اعداد زنده جایگزین شوند:
@@ -381,7 +416,7 @@ export function TextsStep({ draft, patch, lang, setLang }: StepProps & { lang: L
       <Section title={`متن‌های ${LANG_NAMES[activeLang]}`}>
         <div className="space-y-3" dir={dirOf(activeLang)}>
           {TEXT_FIELDS.map((f) => (
-            <Field key={f.key} label={f.label} hint={f.hint}>
+            <Field key={f.key} label={missing.includes(f.key) ? `${f.label} — ⚠ ترجمه نشده` : f.label} hint={f.hint}>
               {f.multiline ? (
                 <textarea rows={3} className={inputClass} value={texts[f.key]} onChange={(e) => set(f.key, e.target.value)} />
               ) : (
@@ -419,7 +454,13 @@ export function FeaturesStep({ draft, setDraft, patch }: StepProps) {
         <Toggle checked={f.poster} onChange={(v) => set('poster', v)} label="دکمه‌ی دانلود پوستر" description="ذخیره‌ی تصویر باکیفیت صفحه برای اشتراک در شبکه‌های اجتماعی" />
         <Toggle checked={f.replay} onChange={(v) => set('replay', v)} label="دکمه‌ی پخش دوباره‌ی انیمیشن" />
         <Toggle checked={f.languageSwitch} onChange={(v) => set('languageSwitch', v)} label="دکمه‌ی تغییر زبان" description="فقط وقتی بیش از یک زبان فعال باشد" />
-        <Toggle checked={f.editorButton} onChange={(v) => set('editorButton', v)} label="دکمه‌ی ثبت امتیاز روی صفحه" description="اگر خاموش باشد، ویرایشگر از لینک مستقیم یا داشبورد در دسترس است" />
+        <Toggle checked={f.lastUpdated} onChange={(v) => set('lastUpdated', v)} label="زمان آخرین به‌روزرسانی" description="مثلاً «به‌روزرسانی: ۲ ساعت پیش» تا بیننده بداند عدد تازه است" />
+        <Toggle
+          checked={f.editorButton}
+          onChange={(v) => set('editorButton', v)}
+          label="دکمه‌ی ثبت امتیاز برای همه‌ی بازدیدکنندگان"
+          description="خاموش (پیشنهادی): دکمه فقط در دستگاه‌هایی دیده می‌شود که قبلاً با رمز وارد شده‌اند؛ مسئول تیم از لینک زیر وارد می‌شود"
+        />
       </Section>
 
       <Section
@@ -427,6 +468,7 @@ export function FeaturesStep({ draft, setDraft, patch }: StepProps) {
         description="با این رمز، مسئول تیم فقط می‌تواند امتیاز همین صفحه را به‌روز کند و به استودیو دسترسی ندارد. بدون رمز ویرایشگر، فقط مدیر پلتفرم امتیاز ثبت می‌کند."
       >
         {draft.hasEditorPassword && !draft.removeEditorPassword && <p className="text-xs text-emerald-400">برای این صفحه رمز ویرایشگر تعریف شده است.</p>}
+        {draft.originalSlug && <EditorLink slug={draft.originalSlug} />}
         <Field label={draft.hasEditorPassword ? 'رمز جدید (خالی = بدون تغییر)' : 'رمز ویرایشگر (اختیاری)'} hint="حداقل ۶ کاراکتر">
           <input
             type="password"
@@ -444,6 +486,67 @@ export function FeaturesStep({ draft, setDraft, patch }: StepProps) {
           />
         )}
       </Section>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Shared bits
+// ---------------------------------------------------------------------------
+function ContrastWarnings({ config, patch }: { config: GoalConfig; patch: StepProps['patch'] }) {
+  const issues = contrastIssues(config.theme.palette);
+  if (issues.length === 0) return null;
+  const fixAll = () =>
+    patch((c) => {
+      for (const issue of contrastIssues(c.theme.palette)) {
+        c.theme.palette[issue.key] = fixContrast(c.theme.palette[issue.key], c.theme.palette[issue.against], issue.min);
+      }
+      c.theme.paletteId = 'custom';
+    });
+  return (
+    <div className="rounded-xl border border-amber-400/40 bg-amber-400/10 p-4 space-y-2" role="alert">
+      <div className="flex items-center gap-2 text-sm font-bold text-amber-200">
+        <AlertTriangle size={16} />
+        خوانایی رنگ‌ها کافی نیست
+      </div>
+      <ul className="text-xs text-amber-100/90 space-y-1 list-disc ps-5">
+        {issues.map((i) => (
+          <li key={`${i.key}-${i.against}`}>
+            {i.message} ({paletteLabel(i.key)} روی {paletteLabel(i.against)}: {i.ratio.toFixed(1)} از حداقل {i.min})
+          </li>
+        ))}
+      </ul>
+      <button type="button" className={`${buttonClass.ghost} !border-amber-400/50 !text-amber-100`} onClick={fixAll}>
+        <Wand2 size={15} />
+        اصلاح خودکار رنگ‌ها
+      </button>
+    </div>
+  );
+}
+
+function EditorLink({ slug }: { slug: string }) {
+  const [copied, setCopied] = useState(false);
+  const url = `${goalUrl(slug)}&edit`;
+  return (
+    <div className="space-y-1.5">
+      <span className="text-xs font-medium text-zinc-300">لینک ثبت امتیاز برای مسئول تیم</span>
+      <div className="flex items-center gap-2">
+        <code className="flex-1 min-w-0 truncate text-xs bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-2 text-zinc-300" dir="ltr">
+          {url}
+        </code>
+        <button
+          type="button"
+          className={`${buttonClass.ghost} !py-1.5 shrink-0`}
+          onClick={async () => {
+            await navigator.clipboard?.writeText(url).catch(() => undefined);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1500);
+          }}
+        >
+          <Copy size={14} />
+          {copied ? 'کپی شد' : 'کپی'}
+        </button>
+      </div>
     </div>
   );
 }

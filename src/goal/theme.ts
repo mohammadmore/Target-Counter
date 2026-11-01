@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import kiyanBg from '../assets/kiyanbg.jpg';
+import kiyanBg from '../assets/kiyanbg.webp';
 import { FONTS } from './presets';
 import type { GoalConfig } from './types';
 

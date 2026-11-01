@@ -42,8 +42,11 @@ export interface GoalFeatures {
   confetti: boolean;
   poster: boolean;
   replay: boolean;
+  /** Show the score button to every visitor (devices with a saved login always see it). */
   editorButton: boolean;
   languageSwitch: boolean;
+  /** "Updated 2 hours ago" line under the numbers. */
+  lastUpdated: boolean;
 }
 
 export interface GoalConfig {

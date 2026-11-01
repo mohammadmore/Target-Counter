@@ -1,14 +1,16 @@
-import type { ComponentType } from 'react';
+import { lazy, type ComponentType } from 'react';
 import type { VizType } from '../goal/types';
 import type { VizProps } from './common';
-import GaugeViz from './GaugeViz';
-import RingViz from './RingViz';
-import BarViz from './BarViz';
-import ThermometerViz from './ThermometerViz';
-import LiquidViz from './LiquidViz';
-import JourneyViz from './JourneyViz';
-import CounterViz from './CounterViz';
-import WaffleViz from './WaffleViz';
+
+// Each style is its own chunk: a goal page only downloads the one it uses.
+const GaugeViz = lazy(() => import('./GaugeViz'));
+const RingViz = lazy(() => import('./RingViz'));
+const BarViz = lazy(() => import('./BarViz'));
+const ThermometerViz = lazy(() => import('./ThermometerViz'));
+const LiquidViz = lazy(() => import('./LiquidViz'));
+const JourneyViz = lazy(() => import('./JourneyViz'));
+const CounterViz = lazy(() => import('./CounterViz'));
+const WaffleViz = lazy(() => import('./WaffleViz'));
 
 export interface VizDefinition {
   id: VizType;

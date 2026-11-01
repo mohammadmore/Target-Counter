@@ -1,29 +1,44 @@
-import { lazy, Suspense, useMemo, useState } from 'react';
-import { useGoal } from './hooks/useGoal';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
+import { useGoal, writeGoalCache } from './hooks/useGoal';
 import { normalizeConfig } from './goal/normalize';
-import { themeStyle } from './goal/theme';
-import { createDefaultConfig } from './goal/presets';
 import { isLang, type Lang } from './lib/format';
+import { canEditOnThisDevice } from './lib/api';
 import { hrefFor, navigate, useRoute } from './router';
 import GoalPage from './page/GoalPage';
-import ScoreEditor from './editor/ScoreEditor';
 import { CHROME } from './page/chrome';
 import PreviewHost from './page/PreviewHost';
 
-// The studio (dashboard + wizard) is only needed by admins — keep it out of the viewer bundle.
+// Only admins and team editors need these — keep them out of the viewer bundle.
 const Studio = lazy(() => import('./studio/Studio'));
+const ScoreEditor = lazy(() => import('./editor/ScoreEditor'));
 
+/** Neutral loader: the goal's colours aren't known yet, so don't flash a wrong theme. */
 function Spinner({ message }: { message?: string }) {
   return (
-    <div className="min-h-[100dvh] flex flex-col gap-4 items-center justify-center bg-bg text-text-muted font-goal" role="status">
-      <div className="w-12 h-12 border-4 border-primary/30 border-t-primary-light rounded-full animate-spin" />
-      {message && <p className="text-sm">{message}</p>}
+    <div className="min-h-[100dvh] flex flex-col gap-4 items-center justify-center text-white/70 font-vazirmatn" role="status" aria-label={message ?? 'Loading'}>
+      <div className="w-10 h-10 border-[3px] border-white/15 border-t-white/70 rounded-full animate-spin" />
+      {message && <p className="text-sm px-6 text-center">{message}</p>}
+    </div>
+  );
+}
+
+function Notice({ title, hint, action }: { title: string; hint?: string; action?: { href: string; label: string } }) {
+  return (
+    <div dir="rtl" className="min-h-[100dvh] flex flex-col gap-3 items-center justify-center px-6 text-center text-zinc-100 font-vazirmatn bg-zinc-950">
+      <p className="text-lg font-bold">{title}</p>
+      {hint && <p className="text-sm text-zinc-400 max-w-md leading-relaxed">{hint}</p>}
+      {action && (
+        <a href={action.href} className="mt-2 px-5 py-2 rounded-full border border-amber-400/50 text-amber-200 hover:bg-amber-400/10">
+          {action.label}
+        </a>
+      )}
     </div>
   );
 }
 
 function GoalRoute({ slug, edit }: { slug: string | null; edit: boolean }) {
-  const { goal, status, connectionError, saveScore } = useGoal(slug);
+  const draftToken = useMemo(() => new URLSearchParams(window.location.search).get('draft'), []);
+  const { goal, status, connectionError, mutate, refresh } = useGoal(slug, draftToken);
   // Re-normalize only when the stored config actually changes (not on every score poll).
   const configKey = goal ? JSON.stringify(goal.config) : null;
   const config = useMemo(() => (configKey === null ? null : normalizeConfig(JSON.parse(configKey))), [configKey]);
@@ -32,38 +47,49 @@ function GoalRoute({ slug, edit }: { slug: string | null; edit: boolean }) {
     return isLang(q) ? q : null;
   });
 
-  if (status === 'not_found') {
-    const fallback = createDefaultConfig();
-    const chrome = CHROME.fa;
-    return (
-      <div style={themeStyle(fallback)} dir="rtl" className="min-h-[100dvh] flex flex-col gap-4 items-center justify-center bg-bg text-text font-goal">
-        <p className="text-lg">{slug ? chrome.notFound : chrome.noGoals}</p>
-        <a href={hrefFor({ kind: 'studio' })} className="px-5 py-2 rounded-full border border-primary/40 text-primary-light hover:bg-primary/10">
-          {chrome.openStudio}
-        </a>
-      </div>
-    );
-  }
+  // Renamed goals: show the current address in the URL bar.
+  useEffect(() => {
+    if (!goal || !slug || goal.slug === slug) return;
+    const url = new URL(window.location.href);
+    url.searchParams.set('g', goal.slug);
+    window.history.replaceState(null, '', url.toString());
+  }, [goal, slug]);
 
+  // Remember this page (and its colours) for an instant, flash-free next visit.
+  useEffect(() => {
+    if (goal && config && !goal.isDraft) writeGoalCache(slug, goal, config.theme.palette.bg);
+  }, [goal, config, slug]);
+
+  const fa = CHROME.fa;
+  if (status === 'not_found') {
+    return <Notice title={slug ? fa.notFound : fa.noGoals} action={{ href: hrefFor({ kind: 'studio' }), label: fa.openStudio }} />;
+  }
+  if (status === 'not_configured') {
+    return <Notice title={fa.notConfigured} hint={fa.notConfiguredHint} />;
+  }
   if (!goal || !config) {
-    return <Spinner message={status === 'error' ? CHROME.fa.connectionLost : CHROME.fa.connecting} />;
+    return <Spinner message={status === 'error' ? fa.connectionLost : undefined} />;
   }
 
   const lang = langOverride && config.languages.includes(langOverride) ? langOverride : config.defaultLang;
-  const goalRoute = { kind: 'goal' as const, slug: slug ?? goal.slug };
+  const goalRoute = { kind: 'goal' as const, slug: goal.slug };
 
   if (edit) {
     return (
-      <div style={themeStyle(config)} dir="rtl" className="relative min-h-[100dvh] bg-bg text-text font-goal">
+      <Suspense fallback={<Spinner />}>
         <ScoreEditor
           goal={goal}
-          goalName={config.name}
-          save={saveScore}
+          config={config}
+          lang={lang}
+          mutate={mutate}
+          refresh={refresh}
           onBack={() => navigate({ ...goalRoute, edit: false })}
         />
-      </div>
+      </Suspense>
     );
   }
+
+  const showEditor = !goal.isDraft && (config.features.editorButton || canEditOnThisDevice(goal.slug));
 
   return (
     <GoalPage
@@ -72,13 +98,15 @@ function GoalRoute({ slug, edit }: { slug: string | null; edit: boolean }) {
       target={goal.target}
       lang={lang}
       connectionError={connectionError}
+      scoreUpdatedAt={goal.scoreUpdatedAt}
+      isDraft={goal.isDraft}
       onLangChange={(next) => {
         setLangOverride(next);
         const url = new URL(window.location.href);
         url.searchParams.set('lang', next);
         window.history.replaceState(null, '', url.toString());
       }}
-      onOpenEditor={() => navigate({ ...goalRoute, edit: true })}
+      onOpenEditor={showEditor ? () => navigate({ ...goalRoute, edit: true }) : undefined}
     />
   );
 }

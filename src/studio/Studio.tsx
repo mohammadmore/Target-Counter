@@ -4,11 +4,18 @@ import { api, clearToken, isDevStorage, loadToken, messageFor, storeToken, ApiEr
 import { formatNumber, formatPercent } from '../lib/format';
 import { goalUrl, hrefFor, navigate, type Route } from '../router';
 import { normalizeConfig } from '../goal/normalize';
+import { timeAgo } from '../page/chrome';
+
+/** Highlight goals whose score hasn't been updated for this long. */
+const STALE_AFTER_DAYS = 7;
 import { buttonClass, inputClass } from './ui';
 import Wizard from './Wizard';
 
 export default function Studio({ route }: { route: Exclude<Route, { kind: 'goal' } | { kind: 'preview' }> }) {
   const [token, setToken] = useState<string | null>(() => loadToken('platform'));
+  // Session expired mid-work: ask for the password in a dialog over the current
+  // screen instead of unmounting it, so nothing the admin was doing is lost.
+  const [reauth, setReauth] = useState(false);
 
   useEffect(() => {
     document.title = 'استودیو هدف‌گذاری';
@@ -17,23 +24,44 @@ export default function Studio({ route }: { route: Exclude<Route, { kind: 'goal'
   const logout = useCallback(() => {
     clearToken('platform');
     setToken(null);
+    setReauth(false);
+  }, []);
+
+  const requestReauth = useCallback(() => {
+    clearToken('platform');
+    setReauth(true);
   }, []);
 
   return (
     <div dir="rtl" lang="fa" className="min-h-[100dvh] bg-zinc-950 text-zinc-100 font-vazirmatn">
       {!token ? (
-        <Login onLogin={setToken} />
+        <div className="min-h-[100dvh] flex items-center justify-center p-6">
+          <Login onLogin={setToken} />
+        </div>
       ) : route.kind === 'wizard' ? (
-        <Wizard key={route.slug ?? 'new'} token={token} slug={route.slug} onUnauthorized={logout} />
+        <Wizard key={route.slug ?? 'new'} token={token} slug={route.slug} onUnauthorized={requestReauth} />
       ) : (
-        <Dashboard token={token} onLogout={logout} />
+        <Dashboard token={token} onLogout={logout} onUnauthorized={requestReauth} />
+      )}
+      {token && reauth && (
+        <div className="fixed inset-0 z-[80] bg-zinc-950/85 backdrop-blur-sm flex items-center justify-center p-6" role="dialog" aria-modal="true">
+          <Login
+            reauth
+            onLogin={(t) => {
+              setToken(t);
+              setReauth(false);
+            }}
+            onCancel={logout}
+          />
+        </div>
       )}
     </div>
   );
 }
 
-function Login({ onLogin }: { onLogin: (token: string) => void }) {
+function Login({ onLogin, reauth = false, onCancel }: { onLogin: (token: string) => void; reauth?: boolean; onCancel?: () => void }) {
   const [password, setPassword] = useState('');
+  const [remember, setRemember] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -42,9 +70,9 @@ function Login({ onLogin }: { onLogin: (token: string) => void }) {
     setBusy(true);
     setError('');
     try {
-      const result = await api.login(password);
+      const result = await api.login(password, undefined, remember);
       if (result.scope !== 'platform') throw new ApiError('invalid_password');
-      storeToken('platform', result);
+      storeToken('platform', result, remember);
       onLogin(result.token);
     } catch (err) {
       setError(messageFor(err));
@@ -55,31 +83,42 @@ function Login({ onLogin }: { onLogin: (token: string) => void }) {
   };
 
   return (
-    <div className="min-h-[100dvh] flex items-center justify-center p-6">
-      <form
-        className="w-full max-w-sm rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6 space-y-4"
-        onSubmit={(e) => {
-          e.preventDefault();
-          submit();
-        }}
-      >
-        <div>
-          <h1 className="text-lg font-bold">استودیو هدف‌گذاری</h1>
-          <p className="text-sm text-zinc-400 mt-1">برای ساخت و مدیریت صفحه‌های هدف، رمز مدیر پلتفرم را وارد کنید.</p>
-        </div>
-        <input type="password" autoFocus autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} className={inputClass} placeholder="رمز عبور" aria-label="رمز عبور" />
-        {error && <p className="text-sm text-red-400" role="alert">{error}</p>}
-        <button type="submit" className={`${buttonClass.primary} w-full`} disabled={busy || !password}>
-          {busy && <Loader2 size={16} className="animate-spin" />}
-          ورود
+    <form
+      className="w-full max-w-sm rounded-2xl border border-zinc-800 bg-zinc-900 p-6 space-y-4 shadow-2xl"
+      onSubmit={(e) => {
+        e.preventDefault();
+        submit();
+      }}
+    >
+      <div>
+        <h1 className="text-lg font-bold">{reauth ? 'نشست شما منقضی شده است' : 'استودیو هدف‌گذاری'}</h1>
+        <p className="text-sm text-zinc-400 mt-1 leading-relaxed">
+          {reauth
+            ? 'برای ادامه دوباره رمز مدیر را وارد کنید. کارهایی که انجام داده‌اید حفظ شده‌اند و ذخیره‌ی نیمه‌کاره خودکار ادامه پیدا می‌کند.'
+            : 'برای ساخت و مدیریت صفحه‌های هدف، رمز مدیر پلتفرم را وارد کنید.'}
+        </p>
+      </div>
+      <input type="password" autoFocus autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} className={inputClass} placeholder="رمز عبور" aria-label="رمز عبور" />
+      <label className="flex items-center gap-2 text-sm text-zinc-400 cursor-pointer">
+        <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} className="w-4 h-4 accent-amber-400" />
+        مرا در این دستگاه به خاطر بسپار (۳۰ روز)
+      </label>
+      {error && <p className="text-sm text-red-400" role="alert">{error}</p>}
+      <button type="submit" className={`${buttonClass.primary} w-full`} disabled={busy || !password}>
+        {busy && <Loader2 size={16} className="animate-spin" />}
+        ورود
+      </button>
+      {onCancel && (
+        <button type="button" onClick={onCancel} className="block w-full text-center text-xs text-zinc-500 hover:text-zinc-300">
+          خروج کامل
         </button>
-        {import.meta.env.DEV && <p className="text-[0.7rem] text-zinc-500">حالت توسعه: هر رمزی پذیرفته می‌شود.</p>}
-      </form>
-    </div>
+      )}
+      {import.meta.env.DEV && <p className="text-[0.7rem] text-zinc-500">حالت توسعه: هر رمزی پذیرفته می‌شود.</p>}
+    </form>
   );
 }
 
-function Dashboard({ token, onLogout }: { token: string; onLogout: () => void }) {
+function Dashboard({ token, onLogout, onUnauthorized }: { token: string; onLogout: () => void; onUnauthorized: () => void }) {
   const [goals, setGoals] = useState<GoalSummary[] | null>(null);
   const [defaultGoal, setDefaultGoal] = useState<string | null>(null);
   const [error, setError] = useState('');
@@ -87,10 +126,10 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
 
   const handle = useCallback(
     (err: unknown) => {
-      if (err instanceof ApiError && err.code === 'unauthorized') onLogout();
+      if (err instanceof ApiError && err.code === 'unauthorized') onUnauthorized();
       else setError(messageFor(err));
     },
-    [onLogout],
+    [onUnauthorized],
   );
 
   const refresh = useCallback(async () => {
@@ -108,6 +147,12 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
     refresh();
   }, [refresh]);
 
+  // Keep "last update" times and scores fresh while the dashboard is open.
+  useEffect(() => {
+    const id = setInterval(refresh, 60_000);
+    return () => clearInterval(id);
+  }, [refresh]);
+
   const run = async (action: () => Promise<unknown>) => {
     try {
       await action();
@@ -120,11 +165,12 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
   const duplicate = (slug: string) =>
     run(async () => {
       const goal = await api.getForEdit(token, slug);
-      const config = normalizeConfig(goal.config);
+      const config = normalizeConfig(goal.draft ? goal.draft.config : goal.config);
       config.name = `${config.name} (کپی)`;
       let copySlug = `${slug}-copy`;
       for (let i = 2; goals?.some((g) => g.slug === copySlug); i++) copySlug = `${slug}-copy-${i}`;
-      await api.save(token, { originalSlug: null, slug: copySlug, config, target: goal.target, score: 0 });
+      // The copy starts unpublished with a zero score, so nothing appears publicly by accident.
+      await api.save(token, { originalSlug: null, slug: copySlug, config, target: goal.target, publish: false });
     });
 
   const copyLink = async (slug: string) => {
@@ -179,6 +225,8 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
           {goals.map((g) => {
             const ratio = g.target > 0 ? Math.min(g.score / g.target, 1) : 0;
             const name = g.name ?? (g.slug === 'kiyan' ? 'سفیر مروارید کیان‌تیم' : g.slug);
+            const daysSinceScore = (Date.now() / 1000 - g.scoreUpdatedAt) / 86_400;
+            const stale = g.published && daysSinceScore > STALE_AFTER_DAYS;
             return (
               <li key={g.slug} className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-4 space-y-3">
                 <div className="flex items-start justify-between gap-2">
@@ -190,6 +238,8 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
                           <Home size={11} /> صفحه‌ی اصلی
                         </span>
                       )}
+                      {!g.published && <span className="shrink-0 text-[0.65rem] px-1.5 py-0.5 rounded bg-zinc-700 text-zinc-200">منتشر نشده</span>}
+                      {g.published && g.hasDraft && <span className="shrink-0 text-[0.65rem] px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-300">پیش‌نویس دارد</span>}
                     </div>
                     <a href={hrefFor({ kind: 'goal', slug: g.slug, edit: false })} target="_blank" rel="noreferrer" className="text-xs text-zinc-500 font-mono hover:text-zinc-300" dir="ltr">
                       ?g={g.slug}
@@ -203,27 +253,36 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
                 <div className="h-1.5 rounded-full bg-zinc-800 overflow-hidden">
                   <div className="h-full bg-amber-400 rounded-full" style={{ width: `${ratio * 100}%` }} />
                 </div>
-                <div className="text-xs text-zinc-400" dir="ltr" style={{ textAlign: 'right' }}>
-                  {formatNumber(g.score, 'fa')} / {formatNumber(g.target, 'fa')}
+                <div className="flex flex-wrap justify-between gap-2 text-xs">
+                  <span className="text-zinc-400" dir="ltr">
+                    {formatNumber(g.score, 'fa')} / {formatNumber(g.target, 'fa')}
+                  </span>
+                  <span className={stale ? 'text-amber-300' : 'text-zinc-500'} title={stale ? 'مدتی است امتیازی ثبت نشده؛ عدد صفحه ممکن است قدیمی باشد' : undefined}>
+                    {stale && '⚠ '}آخرین ثبت امتیاز: {timeAgo(g.scoreUpdatedAt, 'fa')}
+                  </span>
                 </div>
 
                 <div className="flex flex-wrap gap-1.5 pt-1">
-                  <a className={`${buttonClass.ghost} !px-2.5 !py-1.5 !text-xs`} href={hrefFor({ kind: 'goal', slug: g.slug, edit: false })} target="_blank" rel="noreferrer">
-                    <ExternalLink size={14} /> مشاهده
-                  </a>
+                  {g.published && (
+                    <a className={`${buttonClass.ghost} !px-2.5 !py-1.5 !text-xs`} href={hrefFor({ kind: 'goal', slug: g.slug, edit: false })} target="_blank" rel="noreferrer">
+                      <ExternalLink size={14} /> مشاهده
+                    </a>
+                  )}
                   <button className={`${buttonClass.ghost} !px-2.5 !py-1.5 !text-xs`} onClick={() => navigate({ kind: 'wizard', slug: g.slug })}>
                     <Palette size={14} /> طراحی
                   </button>
-                  <a className={`${buttonClass.ghost} !px-2.5 !py-1.5 !text-xs`} href={hrefFor({ kind: 'goal', slug: g.slug, edit: true })}>
-                    <PenLine size={14} /> ثبت امتیاز
-                  </a>
-                  <button className={`${buttonClass.ghost} !px-2.5 !py-1.5 !text-xs`} onClick={() => copyLink(g.slug)}>
+                  {g.published && (
+                    <a className={`${buttonClass.ghost} !px-2.5 !py-1.5 !text-xs`} href={hrefFor({ kind: 'goal', slug: g.slug, edit: true })}>
+                      <PenLine size={14} /> ثبت امتیاز
+                    </a>
+                  )}
+                  <button className={`${buttonClass.ghost} !px-2.5 !py-1.5 !text-xs`} onClick={() => copyLink(g.slug)} hidden={!g.published}>
                     <Copy size={14} /> {copied === g.slug ? 'کپی شد' : 'لینک'}
                   </button>
                   <button className={`${buttonClass.ghost} !px-2.5 !py-1.5 !text-xs`} onClick={() => duplicate(g.slug)} title="ساخت کپی از این صفحه">
                     <CopyPlus size={14} />
                   </button>
-                  {g.slug !== defaultGoal && (
+                  {g.slug !== defaultGoal && g.published && (
                     <button className={`${buttonClass.ghost} !px-2.5 !py-1.5 !text-xs`} onClick={() => run(() => api.setDefault(token, g.slug))} title="نمایش در آدرس اصلی سایت">
                       <Star size={14} />
                     </button>

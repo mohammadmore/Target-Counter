@@ -48,7 +48,7 @@ export const PALETTES: PalettePreset[] = [
   {
     id: 'daylight',
     name: 'روشن',
-    palette: { bg: '#f6f4ef', surface: '#ffffff', primary: '#2563eb', primaryLight: '#60a5fa', primaryDark: '#1e3a8a', text: '#1f2937', textMuted: '#6b7280', track: '#e5e7eb' },
+    palette: { bg: '#f6f4ef', surface: '#ffffff', primary: '#2563eb', primaryLight: '#2f74e6', primaryDark: '#1e3a8a', text: '#1f2937', textMuted: '#6b7280', track: '#e5e7eb' },
   },
 ];
 
@@ -219,8 +219,9 @@ export function createDefaultConfig(): GoalConfig {
       confetti: true,
       poster: true,
       replay: true,
-      editorButton: true,
+      editorButton: false,
       languageSwitch: true,
+      lastUpdated: true,
     },
   };
 }
@@ -264,5 +265,7 @@ export function createKiyanConfig(): GoalConfig {
     },
     visualization: { ...base.visualization, type: 'gauge', ringText: 'KIYAN PEARL AMBASSADORS' },
     background: { type: 'image', image: 'builtin:kiyan', overlay: 0.75, particles: true },
+    // The original page had a public settings button; keep it for continuity.
+    features: { ...base.features, editorButton: true },
   };
 }

@@ -3,16 +3,47 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#060605" />
-    <title>کیان‌تیم | تعهد سازمانی</title>
-    <meta name="description" content="شمارنده‌ی زنده‌ی امتیاز کیان‌تیم تا رسیدن به سفیر مروارید" />
-    <meta property="og:title" content="کیان‌تیم | تعهد سازمانی" />
-    <meta property="og:description" content="شمارنده‌ی زنده‌ی امتیاز کیان‌تیم تا رسیدن به سفیر مروارید" />
+    <meta name="theme-color" content="#0b0b0c" />
+    <title>هدف تیمی</title>
+    <meta name="description" content="شمارنده‌ی زنده‌ی پیشرفت تیم به سوی هدف" />
+    <meta property="og:title" content="هدف تیمی" />
+    <meta property="og:description" content="شمارنده‌ی زنده‌ی پیشرفت تیم به سوی هدف" />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
+    <style>
+      /* Painted before any JS: no white flash, even on slow mobile networks. */
+      html, body { margin: 0; background: #0b0b0c; min-height: 100%; }
+      .boot { min-height: 100vh; min-height: 100dvh; display: flex; align-items: center; justify-content: center; }
+      .boot i { width: 40px; height: 40px; border-radius: 50%; border: 3px solid rgba(255,255,255,.14); border-top-color: rgba(255,255,255,.7); animation: boot-spin .9s linear infinite; }
+      @keyframes boot-spin { to { transform: rotate(360deg); } }
+      @media (prefers-reduced-motion: reduce) { .boot i { animation-duration: 3s; } }
+    </style>
+    <script>
+      // Start loading the goal's data while the app bundle downloads, and use the
+      // background colour remembered from the last visit to avoid a colour flash.
+      (function () {
+        try {
+          var q = new URLSearchParams(location.search);
+          if (q.has('studio') || q.has('preview')) return;
+          var slug = q.get('g') || '';
+          var draft = q.get('draft') || '';
+          var cached = JSON.parse(localStorage.getItem('goal_cache_' + (slug || '_default')) || 'null');
+          if (cached && /^#[0-9a-f]{3,8}$/i.test(cached.bg || '') && !draft) {
+            document.documentElement.style.background = cached.bg;
+            document.querySelector('meta[name=theme-color]').setAttribute('content', cached.bg);
+          }
+          var p = new URLSearchParams();
+          if (slug) p.set('goal', slug);
+          if (draft) p.set('draft', draft);
+          var url = './api.php' + (p.toString() ? '?' + p.toString() : '');
+          window.__goalPrefetch = { url: url, promise: fetch(url, { cache: 'no-store' }) };
+          window.__goalPrefetch.promise.catch(function () {});
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root"><div class="boot" role="status" aria-label="Loading"><i></i></div></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
