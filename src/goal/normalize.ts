@@ -1,6 +1,7 @@
 import { isLang, LANGS } from '../lib/format';
-import { createDefaultConfig, createKiyanConfig, FONTS } from './presets';
-import { VIZ_TYPES, type GoalConfig, type Palette } from './types';
+import { createDefaultConfig, createKiyanConfig, FONTS, PALETTES } from './presets';
+import { deriveCounterpart, isLight } from './quality';
+import { VIZ_TYPES, type ColorMode, type GoalConfig, type Palette } from './types';
 
 const HEX = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
 const MAX_TEXT = 400;
@@ -40,7 +41,7 @@ export function safeAssetUrl(value: string): string {
  */
 export function normalizeConfig(raw: unknown): GoalConfig {
   const base = raw === null || raw === undefined ? createKiyanConfig() : createDefaultConfig();
-  const cfg = mergeShape(base, raw);
+  const cfg = mergeShape(base, migrateLegacyTheme(raw));
 
   cfg.version = 1;
   cfg.languages = Array.from(new Set(cfg.languages.filter(isLang)));
@@ -52,8 +53,11 @@ export function normalizeConfig(raw: unknown): GoalConfig {
   cfg.visualization.milestones = Math.min(10, Math.max(2, Math.round(cfg.visualization.milestones) || 4));
   if (cfg.visualization.counterMode !== 'score') cfg.visualization.counterMode = 'remaining';
 
-  for (const key of Object.keys(base.theme.palette) as (keyof Palette)[]) {
-    if (!HEX.test(cfg.theme.palette[key])) cfg.theme.palette[key] = base.theme.palette[key];
+  if (!['dark', 'light', 'both'].includes(cfg.theme.mode)) cfg.theme.mode = base.theme.mode;
+  for (const mode of ['dark', 'light'] as ColorMode[]) {
+    for (const key of Object.keys(base.theme.palettes[mode]) as (keyof Palette)[]) {
+      if (!HEX.test(cfg.theme.palettes[mode][key])) cfg.theme.palettes[mode][key] = base.theme.palettes[mode][key];
+    }
   }
   if (!FONTS.some((f) => f.id === cfg.theme.font.id)) cfg.theme.font.id = 'vazirmatn';
   cfg.theme.font.customUrl = safeAssetUrl(cfg.theme.font.customUrl);
@@ -64,6 +68,28 @@ export function normalizeConfig(raw: unknown): GoalConfig {
   if (cfg.background.type === 'image' && !cfg.background.image) cfg.background.type = 'glow';
   cfg.background.overlay = Math.min(1, Math.max(0, Number(cfg.background.overlay) || 0));
   cfg.logo = safeAssetUrl(cfg.logo);
+  cfg.logoDark = safeAssetUrl(cfg.logoDark);
 
   return cfg;
+}
+
+/**
+ * Configs saved before light/dark support had a single `theme.palette`.
+ * Keep their exact look: the palette fills its own mode slot, the page stays
+ * in that mode, and a matching counterpart is prepared for when an admin
+ * switches the page to "both".
+ */
+function migrateLegacyTheme(raw: unknown): unknown {
+  if (!isPlain(raw) || !isPlain(raw.theme)) return raw;
+  const theme = raw.theme;
+  if (isPlain(theme.palettes) || !isPlain(theme.palette)) return raw;
+  const old = theme.palette as unknown as Palette;
+  const bg = typeof old.bg === 'string' && HEX.test(old.bg) ? old.bg : '#000000';
+  const mode: ColorMode = isLight(bg) ? 'light' : 'dark';
+  const preset = PALETTES.find((p) => p.id === theme.paletteId && JSON.stringify(p[mode]) === JSON.stringify(old));
+  const counterpart = preset ? preset[mode === 'dark' ? 'light' : 'dark'] : deriveCounterpart(mergeShape(PALETTES[0][mode], old), mode === 'dark' ? 'light' : 'dark');
+  const palettes = mode === 'dark' ? { dark: old, light: counterpart } : { dark: counterpart, light: old };
+  const { palette: _ignored, ...rest } = theme;
+  void _ignored;
+  return { ...raw, theme: { ...rest, mode, palettes } };
 }

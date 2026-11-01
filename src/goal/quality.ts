@@ -35,6 +35,48 @@ export function fixContrast(fg: string, bg: string, min: number) {
   return towards ? '#ffffff' : '#000000';
 }
 
+/** Linear mix of two colours: t=0 → a, t=1 → b. */
+export function mix(a: string, b: string, t: number) {
+  const [r1, g1, b1] = rgb(a);
+  const [r2, g2, b2] = rgb(b);
+  return `#${toHex(r1 + (r2 - r1) * t)}${toHex(g1 + (g2 - g1) * t)}${toHex(b1 + (b2 - b1) * t)}`;
+}
+
+export const isLight = (hex: string) => contrastRatio(hex, '#000000') > contrastRatio(hex, '#ffffff');
+
+/**
+ * Builds a readable palette for the other colour mode from a custom palette,
+ * keeping its hue: e.g. a custom dark palette gets a matching light version.
+ */
+export function deriveCounterpart(p: Palette, to: 'light' | 'dark'): Palette {
+  if (to === 'light') {
+    const bg = mix('#ffffff', p.primary, 0.05);
+    const text = fixContrast(mix('#111111', p.primary, 0.12), bg, 12);
+    return {
+      bg,
+      surface: '#ffffff',
+      primary: fixContrast(p.primary, bg, 3),
+      primaryLight: fixContrast(p.primary, bg, 4.5),
+      primaryDark: fixContrast(p.primaryDark, bg, 7),
+      text,
+      textMuted: fixContrast(mix(text, bg, 0.45), bg, 4.5),
+      track: mix(bg, p.primary, 0.14),
+    };
+  }
+  const bg = mix('#05050a', p.primary, 0.06);
+  const text = fixContrast(mix('#f5f5f5', p.primary, 0.08), bg, 12);
+  return {
+    bg,
+    surface: mix(bg, '#ffffff', 0.04),
+    primary: fixContrast(p.primary, bg, 4.5),
+    primaryLight: fixContrast(mix(p.primary, '#ffffff', 0.45), bg, 7),
+    primaryDark: mix(p.primary, '#000000', 0.35),
+    text,
+    textMuted: fixContrast(mix(text, bg, 0.4), bg, 4.5),
+    track: mix(bg, p.primary, 0.14),
+  };
+}
+
 export interface ContrastIssue {
   key: keyof Palette;
   against: keyof Palette;

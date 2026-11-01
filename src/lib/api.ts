@@ -1,5 +1,25 @@
 import { API_URL, DEFAULT_TARGET } from '../config';
 
+export const CONTACT_TYPES = ['website', 'email', 'phone', 'whatsapp', 'telegram', 'instagram', 'linkedin', 'link'] as const;
+export type ContactType = (typeof CONTACT_TYPES)[number];
+
+export interface Contact {
+  type: ContactType;
+  value: string;
+  label: string;
+}
+
+/** The studio's own branding, shown in the credit on every page. */
+export interface PlatformProfile {
+  /** Logo for light backgrounds ("uploads/…" or https). Empty = built-in mark. */
+  logoLight: string;
+  /** Logo for dark backgrounds. */
+  logoDark: string;
+  contacts: Contact[];
+}
+
+export const EMPTY_PROFILE: PlatformProfile = { logoLight: '', logoDark: '', contacts: [] };
+
 export interface GoalPayload {
   slug: string;
   /** Raw stored config — always pass through normalizeConfig(). null = legacy Kiyan page. */
@@ -11,6 +31,8 @@ export interface GoalPayload {
   scoreUpdatedAt: number;
   /** True when this payload shows an unpublished draft (preview link). */
   isDraft: boolean;
+  /** Included by the server so the credit needs no extra request. */
+  platform?: PlatformProfile;
 }
 
 export interface StudioGoal extends GoalPayload {
@@ -189,7 +211,9 @@ interface Api {
   updateScore(token: string, goal: string, update: ScoreUpdate): Promise<GoalPayload & { entryId: number | null }>;
   history(token: string, goal: string): Promise<{ entries: HistoryEntry[]; undoableId: number | null }>;
   undo(token: string, goal: string, entryId: number): Promise<GoalPayload>;
-  list(token: string): Promise<{ goals: GoalSummary[]; defaultGoal: string | null }>;
+  list(token: string): Promise<{ goals: GoalSummary[]; defaultGoal: string | null; platform?: PlatformProfile }>;
+  getPlatform(): Promise<PlatformProfile>;
+  savePlatform(token: string, profile: PlatformProfile): Promise<PlatformProfile>;
   getForEdit(token: string, goal: string): Promise<StudioGoal>;
   save(token: string, input: SaveGoalInput): Promise<StudioGoal>;
   discardDraft(token: string, goal: string): Promise<StudioGoal>;
@@ -205,6 +229,8 @@ const realApi: Api = {
   history: (token, goal) => post({ action: 'history', goal }, token),
   undo: (token, goal, entryId) => post({ action: 'undo', goal, entryId }, token),
   list: (token) => post({ action: 'list' }, token),
+  getPlatform: () => request<PlatformProfile>({}, '?platform'),
+  savePlatform: (token, profile) => post({ action: 'savePlatform', profile }, token),
   getForEdit: (token, goal) => post({ action: 'get', goal }, token),
   save: (token, input) => post({ action: 'save', ...input }, token),
   discardDraft: (token, goal) => post({ action: 'discardDraft', goal }, token),
@@ -243,6 +269,7 @@ interface DevDb {
   aliases: Record<string, string>;
   log: (HistoryEntry & { slug: string })[];
   defaultGoal: string | null;
+  platform?: PlatformProfile;
 }
 const DEV_KEY = 'goal_platform_dev_db_v2';
 const SLUG = /^[a-z0-9](?:[a-z0-9-]{0,46}[a-z0-9])?$/;
@@ -300,7 +327,17 @@ const devApi: Api = {
     const g = db.goals[key];
     const previewing = !!draftToken && draftToken === g.draftToken;
     if (!g.published && !previewing) throw new ApiError('not_found', 404);
-    return devPublic(key, g, previewing);
+    return { ...devPublic(key, g, previewing), platform: db.platform ?? EMPTY_PROFILE };
+  },
+  async getPlatform() {
+    return devDb().platform ?? EMPTY_PROFILE;
+  },
+  async savePlatform(token, profile) {
+    devAuth(token);
+    const db = devDb();
+    db.platform = { ...profile, contacts: profile.contacts.filter((c) => c.value.trim()).slice(0, 12) };
+    devSave(db);
+    return db.platform;
   },
   async login(password) {
     if (!password) throw new ApiError('invalid_password', 401);
@@ -370,7 +407,7 @@ const devApi: Api = {
         published: g.published,
       }))
       .sort((a, b) => b.updatedAt - a.updatedAt);
-    return { goals, defaultGoal: db.defaultGoal };
+    return { goals, defaultGoal: db.defaultGoal, platform: db.platform ?? EMPTY_PROFILE };
   },
   async getForEdit(token, slug) {
     devAuth(token);
@@ -485,6 +522,8 @@ export const api: Api = {
   history: (token, goal) => withFallback((a) => a.history(token, goal)),
   undo: (token, goal, entryId) => withFallback((a) => a.undo(token, goal, entryId)),
   list: (token) => withFallback((a) => a.list(token)),
+  getPlatform: () => withFallback((a) => a.getPlatform()),
+  savePlatform: (token, profile) => withFallback((a) => a.savePlatform(token, profile)),
   getForEdit: (token, goal) => withFallback((a) => a.getForEdit(token, goal)),
   save: (token, input) => withFallback((a) => a.save(token, input)),
   discardDraft: (token, goal) => withFallback((a) => a.discardDraft(token, goal)),

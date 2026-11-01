@@ -34,6 +34,22 @@ export interface GoalTexts {
   footer: string;
 }
 
+/** Which colour mode a page is rendered in. */
+export type ColorMode = 'dark' | 'light';
+/** Which modes a goal offers: one fixed mode, or both with a visitor toggle. */
+export type ThemeMode = ColorMode | 'both';
+
+export interface LogoPlacements {
+  /** Above the page title. */
+  header: boolean;
+  /** In the score editor header. */
+  editor: boolean;
+  /** Corner of the downloadable poster. */
+  poster: boolean;
+  /** Browser tab icon. */
+  favicon: boolean;
+}
+
 export type BackgroundType = 'glow' | 'solid' | 'gradient' | 'image';
 
 export interface GoalFeatures {
@@ -66,8 +82,10 @@ export interface GoalConfig {
     counterMode: 'remaining' | 'score';
   };
   theme: {
+    /** dark / light only, or both with a visitor toggle (system preference first). */
+    mode: ThemeMode;
     paletteId: string;
-    palette: Palette;
+    palettes: Record<ColorMode, Palette>;
     font: { id: string; customUrl: string };
     radius: 'sharp' | 'soft' | 'round';
   };
@@ -79,8 +97,11 @@ export interface GoalConfig {
     overlay: number;
     particles: boolean;
   };
-  /** Optional logo: "uploads/<file>" or https URL. */
+  /** Organisation logo: "uploads/<file>" or https URL. Used in both modes unless logoDark is set. */
   logo: string;
+  /** Optional variant for dark backgrounds. */
+  logoDark: string;
+  logoPlacements: LogoPlacements;
   features: GoalFeatures;
 }
 

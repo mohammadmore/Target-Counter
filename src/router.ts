@@ -8,12 +8,14 @@ import { useEffect, useState } from 'react';
  *   ./?studio               studio dashboard
  *   ./?studio&new           wizard for a new goal
  *   ./?studio&design=<slug> wizard for an existing goal
+ *   ./?studio&settings      studio settings (Asva logos, contact links)
  *   ./?preview              wizard live-preview frame (config via postMessage)
  */
 export type Route =
   | { kind: 'goal'; slug: string | null; edit: boolean }
   | { kind: 'preview' }
   | { kind: 'studio' }
+  | { kind: 'settings' }
   | { kind: 'wizard'; slug: string | null };
 
 export function parseRoute(search: string): Route {
@@ -21,6 +23,7 @@ export function parseRoute(search: string): Route {
   if (q.has('preview')) return { kind: 'preview' };
   if (q.has('studio')) {
     if (q.has('new')) return { kind: 'wizard', slug: null };
+    if (q.has('settings')) return { kind: 'settings' };
     const design = q.get('design');
     if (design) return { kind: 'wizard', slug: design };
     return { kind: 'studio' };
@@ -37,6 +40,7 @@ export function hrefFor(route: Route, extra: Record<string, string> = {}): strin
     q.set('preview', '');
   } else {
     q.set('studio', '');
+    if (route.kind === 'settings') q.set('settings', '');
     if (route.kind === 'wizard') {
       if (route.slug) q.set('design', route.slug);
       else q.set('new', '');

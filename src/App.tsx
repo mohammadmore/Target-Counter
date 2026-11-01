@@ -2,8 +2,11 @@ import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { readGoalCache, useGoal, writeGoalCache } from './hooks/useGoal';
 import { normalizeConfig } from './goal/normalize';
 import { createDefaultConfig } from './goal/presets';
-import { themeStyle } from './goal/theme';
-import type { GoalConfig } from './goal/types';
+import { paletteFor, resolveMode, themeStyle } from './goal/theme';
+import type { ColorMode, GoalConfig } from './goal/types';
+import { GOAL_MODE_KEY, useColorMode } from './lib/colorMode';
+import { setPlatformProfile } from './lib/platform';
+import Credit from './components/Credit';
 import { isLang, type Lang } from './lib/format';
 import { canEditOnThisDevice } from './lib/api';
 import { hrefFor, navigate, useRoute } from './router';
@@ -21,10 +24,10 @@ function fallbackConfig(slug: string | null): GoalConfig {
   return cached ? normalizeConfig(cached.config) : createDefaultConfig();
 }
 
-function Spinner({ config, message }: { config: GoalConfig; message?: string }) {
+function Spinner({ config, mode, message }: { config: GoalConfig; mode: ColorMode; message?: string }) {
   return (
     <div
-      style={themeStyle(config)}
+      style={themeStyle(config, mode)}
       className="min-h-[100dvh] flex flex-col gap-4 items-center justify-center bg-bg text-text-muted font-goal"
       role="status"
       aria-label={message ?? 'Loading'}
@@ -35,9 +38,9 @@ function Spinner({ config, message }: { config: GoalConfig; message?: string }) 
   );
 }
 
-function Notice({ config, title, hint, action }: { config: GoalConfig; title: string; hint?: string; action?: { href: string; label: string } }) {
+function Notice({ config, mode, title, hint, action }: { config: GoalConfig; mode: ColorMode; title: string; hint?: string; action?: { href: string; label: string } }) {
   return (
-    <div style={themeStyle(config)} dir="rtl" className="relative min-h-[100dvh] bg-bg text-text font-goal overflow-hidden">
+    <div style={themeStyle(config, mode)} dir="rtl" className="relative min-h-[100dvh] bg-bg text-text font-goal overflow-hidden">
       <div className="absolute inset-0 bg-glow pointer-events-none" />
       <div className="relative min-h-[100dvh] flex flex-col gap-3 items-center justify-center px-6 text-center">
         <p className="text-lg font-bold text-primary-light">{title}</p>
@@ -48,6 +51,7 @@ function Notice({ config, title, hint, action }: { config: GoalConfig; title: st
           </a>
         )}
       </div>
+      <Credit mode={mode} tone="goal" />
     </div>
   );
 }
@@ -58,6 +62,7 @@ function GoalRoute({ slug, edit }: { slug: string | null; edit: boolean }) {
   // Re-normalize only when the stored config actually changes (not on every score poll).
   const configKey = goal ? JSON.stringify(goal.config) : null;
   const config = useMemo(() => (configKey === null ? null : normalizeConfig(JSON.parse(configKey))), [configKey]);
+  const [preferredMode, setPreferredMode] = useColorMode(GOAL_MODE_KEY);
   const [langOverride, setLangOverride] = useState<Lang | null>(() => {
     const q = new URLSearchParams(window.location.search).get('lang');
     return isLang(q) ? q : null;
@@ -71,21 +76,28 @@ function GoalRoute({ slug, edit }: { slug: string | null; edit: boolean }) {
     window.history.replaceState(null, '', url.toString());
   }, [goal, slug]);
 
+  const fallback = config ?? fallbackConfig(slug);
+  const mode = resolveMode(fallback, preferredMode);
+
   // Remember this page (and its colours) for an instant, flash-free next visit.
   useEffect(() => {
-    if (goal && config && !goal.isDraft) writeGoalCache(slug, goal, config.theme.palette.bg, config.theme.palette.primaryLight);
-  }, [goal, config, slug]);
+    if (!goal || !config || goal.isDraft) return;
+    const p = paletteFor(config, mode);
+    writeGoalCache(slug, goal, p.bg, p.primaryLight);
+  }, [goal, config, slug, mode]);
+
+  // Every goal response carries the studio profile used by the credit.
+  useEffect(() => setPlatformProfile(goal?.platform), [goal?.platform]);
 
   const fa = CHROME.fa;
-  const fallback = config ?? fallbackConfig(slug);
   if (status === 'not_found') {
-    return <Notice config={fallback} title={slug ? fa.notFound : fa.noGoals} action={{ href: hrefFor({ kind: 'studio' }), label: fa.openStudio }} />;
+    return <Notice config={fallback} mode={mode} title={slug ? fa.notFound : fa.noGoals} action={{ href: hrefFor({ kind: 'studio' }), label: fa.openStudio }} />;
   }
   if (status === 'not_configured') {
-    return <Notice config={fallback} title={fa.notConfigured} hint={fa.notConfiguredHint} />;
+    return <Notice config={fallback} mode={mode} title={fa.notConfigured} hint={fa.notConfiguredHint} />;
   }
   if (!goal || !config) {
-    return <Spinner config={fallback} message={status === 'error' ? fa.connectionLost : undefined} />;
+    return <Spinner config={fallback} mode={mode} message={status === 'error' ? fa.connectionLost : undefined} />;
   }
 
   const lang = langOverride && config.languages.includes(langOverride) ? langOverride : config.defaultLang;
@@ -93,11 +105,12 @@ function GoalRoute({ slug, edit }: { slug: string | null; edit: boolean }) {
 
   if (edit) {
     return (
-      <Suspense fallback={<Spinner config={config} />}>
+      <Suspense fallback={<Spinner config={config} mode={mode} />}>
         <ScoreEditor
           goal={goal}
           config={config}
           lang={lang}
+          colorMode={mode}
           mutate={mutate}
           refresh={refresh}
           onBack={() => navigate({ ...goalRoute, edit: false })}
@@ -114,6 +127,8 @@ function GoalRoute({ slug, edit }: { slug: string | null; edit: boolean }) {
       score={goal.score}
       target={goal.target}
       lang={lang}
+      mode={mode}
+      onModeChange={config.theme.mode === 'both' ? setPreferredMode : undefined}
       connectionError={connectionError}
       scoreUpdatedAt={goal.scoreUpdatedAt}
       isDraft={goal.isDraft}
@@ -136,7 +151,7 @@ export default function App() {
     return <GoalRoute key={`${route.slug}`} slug={route.slug} edit={route.edit} />;
   }
   return (
-    <Suspense fallback={<div className="studio-shell min-h-[100dvh]" />}>
+    <Suspense fallback={<div className="min-h-[100dvh]" />}>
       <Studio route={route} />
     </Suspense>
   );

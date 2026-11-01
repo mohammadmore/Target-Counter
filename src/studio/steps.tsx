@@ -1,10 +1,10 @@
 import { Suspense, useEffect, useState } from 'react';
 import { AlertTriangle, Check, Copy, Info, RotateCcw, Wand2 } from 'lucide-react';
-import type { GoalConfig, GoalTexts, Lang, VizType } from '../goal/types';
+import type { ColorMode, GoalConfig, GoalTexts, Lang, VizType } from '../goal/types';
 import { DEFAULT_TEXTS, FONTS, LANG_NAMES, PALETTES, PALETTE_FIELDS, TEXT_FIELDS } from '../goal/presets';
-import { BUILTIN_BACKGROUNDS, loadFontById, themeStyle } from '../goal/theme';
+import { BUILTIN_BACKGROUNDS, assetUrl, loadFontById, resolveMode, themeStyle } from '../goal/theme';
 import { LANGS, dirOf, formatNumber } from '../lib/format';
-import { contrastIssues, fixContrast, paletteLabel, untranslatedFields } from '../goal/quality';
+import { contrastIssues, deriveCounterpart, fixContrast, paletteLabel, untranslatedFields } from '../goal/quality';
 import NumberInput from '../components/NumberInput';
 import { goalUrl } from '../router';
 import { MAX_VALUE } from '../config';
@@ -33,7 +33,14 @@ export interface StepProps {
   setDraft: (fn: (d: Draft) => Draft) => void;
   patch: (fn: (c: GoalConfig) => void) => void;
   token: string;
+  /** Which colour mode the wizard is previewing / editing. */
+  previewMode: ColorMode;
+  setPreviewMode: (m: ColorMode) => void;
 }
+
+/** Modes a goal actually uses (both when the visitor can switch). */
+export const activeModes = (c: GoalConfig): ColorMode[] => (c.theme.mode === 'both' ? ['dark', 'light'] : [c.theme.mode]);
+export const MODE_NAMES: Record<ColorMode, string> = { dark: 'تیره', light: 'روشن' };
 
 export const SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,46}[a-z0-9])?$/;
 
@@ -87,7 +94,7 @@ export function BasicsStep({ draft, setDraft, patch }: StepProps) {
       <Section title="آدرس صفحه" description="لینک اشتراک‌گذاری صفحه با این شناسه ساخته می‌شود.">
         <Field label="شناسه (slug)" error={errors.slug}>
           <div className="flex items-center gap-2" dir="ltr">
-            <span className="text-xs text-violet-100/45 font-mono shrink-0">?g=</span>
+            <span className="text-xs text-st-muted/80 font-mono shrink-0">?g=</span>
             <input
               className={`${inputClass} font-mono`}
               value={draft.slug}
@@ -96,7 +103,7 @@ export function BasicsStep({ draft, setDraft, patch }: StepProps) {
           </div>
         </Field>
         {renaming && (
-          <p className="flex gap-2 text-xs text-sky-100 bg-sky-400/10 border border-sky-300/30 rounded-xl p-2.5 leading-relaxed">
+          <p className="flex gap-2 text-xs text-st-info bg-sky-400/10 border border-sky-300/30 rounded-xl p-2.5 leading-relaxed">
             <Info size={14} className="shrink-0 mt-0.5" />
             لینک قبلی (<span dir="ltr" className="font-mono">?g={draft.originalSlug}</span>) بعد از ذخیره هم کار می‌کند و خودکار به آدرس جدید می‌رود.
           </p>
@@ -112,7 +119,7 @@ export function BasicsStep({ draft, setDraft, patch }: StepProps) {
                 key={lang}
                 type="button"
                 onClick={() => toggleLang(lang)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm ${on ? 'selected-aurora bg-white/10 text-white' : 'border-white/15 text-violet-100/60 hover:bg-white/10'}`}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm ${on ? 'selected-aurora bg-st-fill/10 text-st-fg' : 'border-st-line/15 text-st-muted hover:bg-st-fill/10'}`}
               >
                 {on && <Check size={14} />}
                 {LANG_NAMES[lang]}
@@ -133,7 +140,7 @@ export function BasicsStep({ draft, setDraft, patch }: StepProps) {
 // ---------------------------------------------------------------------------
 // 2. Visualization style
 // ---------------------------------------------------------------------------
-export function StyleStep({ draft, patch }: StepProps) {
+export function StyleStep({ draft, patch, previewMode }: StepProps) {
   const { config } = draft;
   const selected = VISUALIZATIONS.find((v) => v.id === config.visualization.type)!;
   const lang = config.defaultLang;
@@ -141,7 +148,7 @@ export function StyleStep({ draft, patch }: StepProps) {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-violet-100/60 leading-relaxed">
+      <p className="text-sm text-st-muted leading-relaxed">
         فقط یک سبک انتخاب کنید تا صفحه روی یک پیام تمرکز داشته باشد. پیش‌نمایش‌ها با رنگ و فونت فعلی شما و پیشرفت ۶۲٪ نمایش داده می‌شوند.
       </p>
       <div className="grid grid-cols-2 xl:grid-cols-3 gap-3" role="radiogroup" aria-label="سبک نمایش پیشرفت">
@@ -155,9 +162,9 @@ export function StyleStep({ draft, patch }: StepProps) {
               role="radio"
               aria-checked={active}
               onClick={() => patch((c) => void (c.visualization.type = v.id as VizType))}
-              className={`text-start rounded-2xl border overflow-hidden transition-all ${active ? 'selected-aurora' : 'border-white/10 hover:border-white/30 hover:-translate-y-0.5'}`}
+              className={`text-start rounded-2xl border overflow-hidden transition-all ${active ? 'selected-aurora' : 'border-st-line/10 hover:border-st-line/30 hover:-translate-y-0.5'}`}
             >
-              <div style={themeStyle(config)} dir={dirOf(lang)} className="relative h-[150px] bg-bg text-text font-goal overflow-hidden pointer-events-none">
+              <div style={themeStyle(config, resolveMode(config, previewMode))} dir={dirOf(lang)} className="relative h-[150px] bg-bg text-text font-goal overflow-hidden pointer-events-none">
                 <div className="absolute inset-0 bg-glow opacity-80" />
                 <div className="absolute left-1/2 top-1/2 w-[380px]" style={{ transform: 'translate(-50%, -50%) scale(0.46)' }}>
                   <Suspense fallback={null}>
@@ -167,10 +174,10 @@ export function StyleStep({ draft, patch }: StepProps) {
               </div>
               <div className="p-3 glass-soft !border-0 !rounded-none">
                 <div className="flex items-center gap-1.5 text-sm font-bold">
-                  {active && <Check size={14} className="text-fuchsia-300" />}
+                  {active && <Check size={14} className="text-st-accent" />}
                   {v.name}
                 </div>
-                <p className="text-[0.7rem] text-violet-100/60 mt-1 leading-relaxed">{v.description}</p>
+                <p className="text-[0.7rem] text-st-muted mt-1 leading-relaxed">{v.description}</p>
               </div>
             </button>
           );
@@ -217,16 +224,34 @@ export function StyleStep({ draft, patch }: StepProps) {
 // ---------------------------------------------------------------------------
 // 3. Appearance
 // ---------------------------------------------------------------------------
-export function AppearanceStep({ draft, patch, token }: StepProps) {
+export function AppearanceStep({ draft, patch, token, previewMode, setPreviewMode }: StepProps) {
   const { config } = draft;
-  const { palette } = config.theme;
+  const modes = activeModes(config);
+  const editMode = resolveMode(config, previewMode);
+  const palette = config.theme.palettes[editMode];
+  const other: ColorMode = editMode === 'dark' ? 'light' : 'dark';
 
   // Load every font once so the picker can show real samples.
   useEffect(() => FONTS.forEach((f) => loadFontById(f.id)), []);
 
   return (
     <div className="space-y-4">
-      <Section title="پالت رنگی" description="یک پالت آماده انتخاب کنید و در صورت نیاز هر رنگ را جداگانه تغییر دهید.">
+      <Section title="حالت روشن / تاریک" description="«هر دو» یعنی بازدیدکننده با دکمه‌ی خورشید/ماه بین دو حالت جابه‌جا می‌شود و در ابتدا حالت تنظیم‌شده‌ی دستگاهش را می‌بیند.">
+        <Segmented
+          value={config.theme.mode}
+          options={[
+            { value: 'both', label: 'هر دو (انتخاب بیننده)' },
+            { value: 'dark', label: 'فقط تاریک' },
+            { value: 'light', label: 'فقط روشن' },
+          ]}
+          onChange={(m) => {
+            patch((c) => void (c.theme.mode = m));
+            if (m !== 'both') setPreviewMode(m);
+          }}
+        />
+      </Section>
+
+      <Section title="پالت رنگی" description="هر پالت آماده یک نسخه‌ی تاریک و یک نسخه‌ی روشنِ هماهنگ دارد. بعد از انتخاب می‌توانید هر رنگ را جداگانه تغییر دهید.">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {PALETTES.map((p) => {
             const active = config.theme.paletteId === p.id;
@@ -237,36 +262,66 @@ export function AppearanceStep({ draft, patch, token }: StepProps) {
                 onClick={() =>
                   patch((c) => {
                     c.theme.paletteId = p.id;
-                    c.theme.palette = { ...p.palette };
+                    c.theme.palettes = { dark: { ...p.dark }, light: { ...p.light } };
                   })
                 }
-                className={`glass-soft rounded-xl p-2 text-start transition-all ${active ? 'selected-aurora' : 'hover:border-white/30'}`}
+                className={`glass-soft rounded-xl p-2 text-start transition-all ${active ? 'selected-aurora' : 'hover:border-st-line/30'}`}
               >
-                <div className="flex h-6 rounded overflow-hidden" style={{ background: p.palette.bg }}>
-                  {[p.palette.primaryDark, p.palette.primary, p.palette.primaryLight].map((c) => (
-                    <span key={c} className="flex-1" style={{ background: c }} />
-                  ))}
-                  <span className="flex-1" style={{ background: p.palette.bg }} />
+                <div className="grid grid-cols-2 h-7 rounded-lg overflow-hidden">
+                  {(['dark', 'light'] as ColorMode[])
+                    .filter((m) => modes.includes(m))
+                    .map((m) => (
+                      <span key={m} className={`flex items-center justify-center gap-0.5 ${modes.length === 1 ? 'col-span-2' : ''}`} style={{ background: p[m].bg }}>
+                        {[p[m].primaryDark, p[m].primary, p[m].primaryLight].map((c) => (
+                          <span key={c} className="w-2.5 h-2.5 rounded-full" style={{ background: c }} />
+                        ))}
+                      </span>
+                    ))}
                 </div>
-                <div className="text-xs mt-1.5 text-white/80">{p.name}</div>
+                <div className="text-xs mt-1.5 text-st-fg/80">{p.name}</div>
               </button>
             );
           })}
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
-          {PALETTE_FIELDS.map((f) => (
-            <ColorInput
-              key={f.key}
-              label={f.label}
-              value={palette[f.key]}
-              onChange={(v) =>
+
+        <div className="pt-2 space-y-3">
+          {modes.length > 1 && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-st-muted">ویرایش رنگ‌های حالت:</span>
+              <Segmented value={editMode} options={modes.map((m) => ({ value: m, label: MODE_NAMES[m] }))} onChange={setPreviewMode} />
+            </div>
+          )}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {PALETTE_FIELDS.map((f) => (
+              <ColorInput
+                key={`${editMode}-${f.key}`}
+                label={f.label}
+                value={palette[f.key]}
+                onChange={(v) =>
+                  patch((c) => {
+                    c.theme.palettes[editMode][f.key] = v;
+                    c.theme.paletteId = 'custom';
+                  })
+                }
+              />
+            ))}
+          </div>
+          {modes.length > 1 && (
+            <button
+              type="button"
+              className={buttonClass.ghost}
+              onClick={() =>
                 patch((c) => {
-                  c.theme.palette[f.key] = v;
+                  c.theme.palettes[other] = deriveCounterpart(c.theme.palettes[editMode], other);
                   c.theme.paletteId = 'custom';
                 })
               }
-            />
-          ))}
+              title={`رنگ‌های حالت ${MODE_NAMES[other]} با همین طیف و با خوانایی کافی ساخته می‌شوند`}
+            >
+              <Wand2 size={15} />
+              ساخت خودکار حالت {MODE_NAMES[other]} از روی این رنگ‌ها
+            </button>
+          )}
         </div>
       </Section>
 
@@ -281,12 +336,12 @@ export function AppearanceStep({ draft, patch, token }: StepProps) {
                 key={f.id}
                 type="button"
                 onClick={() => patch((c) => void (c.theme.font.id = f.id))}
-                className={`glass-soft rounded-xl px-3 py-2 text-start transition-all ${active ? 'selected-aurora !bg-white/10' : 'hover:border-white/30'}`}
+                className={`glass-soft rounded-xl px-3 py-2 text-start transition-all ${active ? 'selected-aurora !bg-st-fill/10' : 'hover:border-st-line/30'}`}
               >
                 <div className="text-lg leading-snug" style={{ fontFamily: f.id === 'custom' ? undefined : `${f.family}, Tahoma` }}>
                   {f.id === 'custom' ? '…' : 'هدف ۱۲۳'}
                 </div>
-                <div className="text-[0.7rem] text-violet-100/60">{f.name}</div>
+                <div className="text-[0.7rem] text-st-muted">{f.name}</div>
               </button>
             );
           })}
@@ -368,8 +423,39 @@ export function AppearanceStep({ draft, patch, token }: StepProps) {
         <Toggle checked={config.background.particles} onChange={(v) => patch((c) => void (c.background.particles = v))} label="ذرات معلق درخشان" />
       </Section>
 
-      <Section title="لوگو" description="اختیاری؛ بالای تیتر نمایش داده می‌شود. فرمت PNG با پس‌زمینه‌ی شفاف بهترین نتیجه را دارد.">
-        <UploadField token={token} kind="image" accept="image/png,image/webp,image/jpeg,image/gif" label="آپلود لوگو" value={config.logo} onChange={(url) => patch((c) => void (c.logo = url))} />
+      <Section title="لوگوی سازمان" description="برای نمایش در بخش‌هایی که در زیر انتخاب می‌کنید. PNG یا WebP با پس‌زمینه‌ی شفاف بهترین نتیجه را دارد. کردیت پایین صفحه همیشه لوگوی اسواست.">
+        <div className="grid sm:grid-cols-2 gap-4">
+          <Field label="لوگوی اصلی (برای پس‌زمینه‌ی روشن یا هر دو حالت)">
+            <UploadField token={token} kind="image" accept="image/png,image/webp,image/jpeg,image/gif" label="آپلود لوگو" value={config.logo} onChange={(url) => patch((c) => void (c.logo = url))} />
+          </Field>
+          <Field label="نسخه‌ی حالت تاریک (اختیاری)" hint="اگر لوگوی اصلی روی پس‌زمینه‌ی تیره دیده نمی‌شود (مثلاً لوگوی مشکی)">
+            <UploadField token={token} kind="image" accept="image/png,image/webp,image/jpeg,image/gif" label="آپلود نسخه‌ی تاریک" value={config.logoDark} onChange={(url) => patch((c) => void (c.logoDark = url))} />
+          </Field>
+        </div>
+        {(config.logo || config.logoDark) && (
+          <div className="grid grid-cols-2 gap-3">
+            {(['light', 'dark'] as ColorMode[]).map((m) => {
+              const src = m === 'dark' && config.logoDark ? config.logoDark : config.logo || config.logoDark;
+              return (
+                <div key={m} className="rounded-xl p-4 flex items-center justify-center h-20" style={{ background: config.theme.palettes[m].bg }}>
+                  {src && <img src={assetUrl(src)} alt="" className="max-h-12 max-w-full object-contain" />}
+                </div>
+              );
+            })}
+          </div>
+        )}
+        <div className="space-y-3 pt-1">
+          <span className="text-xs font-medium text-st-fg/85">محل نمایش</span>
+          <Toggle checked={config.logoPlacements.header} onChange={(v) => patch((c) => void (c.logoPlacements.header = v))} label="بالای تیتر صفحه" />
+          <Toggle checked={config.logoPlacements.editor} onChange={(v) => patch((c) => void (c.logoPlacements.editor = v))} label="پنل ثبت امتیاز" />
+          <Toggle
+            checked={config.logoPlacements.poster}
+            onChange={(v) => patch((c) => void (c.logoPlacements.poster = v))}
+            label="پوستر دانلودی"
+            description="اگر لوگو بالای تیتر نباشد، در گوشه‌ی پوستر قرار می‌گیرد"
+          />
+          <Toggle checked={config.logoPlacements.favicon} onChange={(v) => patch((c) => void (c.logoPlacements.favicon = v))} label="آیکن تب مرورگر" />
+        </div>
       </Section>
     </div>
   );
@@ -398,16 +484,16 @@ export function TextsStep({ draft, patch, lang, setLang }: StepProps & { lang: L
         />
       )}
       {missing.length > 0 && (
-        <p className="flex gap-2 text-xs text-amber-100 bg-amber-400/10 border border-amber-300/30 rounded-xl p-2.5 leading-relaxed">
+        <p className="flex gap-2 text-xs text-st-warn bg-amber-400/10 border border-amber-300/30 rounded-xl p-2.5 leading-relaxed">
           <AlertTriangle size={14} className="shrink-0 mt-0.5" />
           {missing.length.toLocaleString('fa-IR')} متنِ این زبان هنوز متن پیش‌فرض است، در حالی که در زبان دیگر نوشته شده. اگر منتشر شود، بازدیدکنندگان این زبان متن عمومی می‌بینند.
         </p>
       )}
-      <div className="glass-soft rounded-xl p-3 text-xs text-violet-100/65 leading-relaxed">
+      <div className="glass-soft rounded-xl p-3 text-xs text-st-muted leading-relaxed">
         در متن‌ها می‌توانید از این جای‌گذارها استفاده کنید تا با اعداد زنده جایگزین شوند:
         <div className="flex flex-wrap gap-1.5 mt-2" dir="ltr">
           {['{target}', '{score}', '{remaining}', '{percent}', '{unit}'].map((p) => (
-            <code key={p} className="px-1.5 py-0.5 rounded-md bg-white/10 text-pink-200">
+            <code key={p} className="px-1.5 py-0.5 rounded-md bg-st-fill/10 text-st-accent">
               {p}
             </code>
           ))}
@@ -428,7 +514,7 @@ export function TextsStep({ draft, patch, lang, setLang }: StepProps & { lang: L
         <button
           type="button"
           onClick={() => patch((c) => void (c.texts[activeLang] = { ...DEFAULT_TEXTS[activeLang] }))}
-          className="inline-flex items-center gap-1.5 text-xs text-violet-100/60 hover:text-white"
+          className="inline-flex items-center gap-1.5 text-xs text-st-muted hover:text-st-fg"
         >
           <RotateCcw size={13} />
           بازگردانی متن‌های پیش‌فرض این زبان
@@ -467,7 +553,7 @@ export function FeaturesStep({ draft, setDraft, patch }: StepProps) {
         title="رمز ویرایشگر امتیاز"
         description="با این رمز، مسئول تیم فقط می‌تواند امتیاز همین صفحه را به‌روز کند و به استودیو دسترسی ندارد. بدون رمز ویرایشگر، فقط مدیر پلتفرم امتیاز ثبت می‌کند."
       >
-        {draft.hasEditorPassword && !draft.removeEditorPassword && <p className="text-xs text-emerald-300">برای این صفحه رمز ویرایشگر تعریف شده است.</p>}
+        {draft.hasEditorPassword && !draft.removeEditorPassword && <p className="text-xs text-st-ok">برای این صفحه رمز ویرایشگر تعریف شده است.</p>}
         {draft.originalSlug && <EditorLink slug={draft.originalSlug} />}
         <Field label={draft.hasEditorPassword ? 'رمز جدید (خالی = بدون تغییر)' : 'رمز ویرایشگر (اختیاری)'} hint="حداقل ۶ کاراکتر">
           <input
@@ -494,29 +580,32 @@ export function FeaturesStep({ draft, setDraft, patch }: StepProps) {
 // Shared bits
 // ---------------------------------------------------------------------------
 function ContrastWarnings({ config, patch }: { config: GoalConfig; patch: StepProps['patch'] }) {
-  const issues = contrastIssues(config.theme.palette);
+  const modes = activeModes(config);
+  const issues = modes.flatMap((m) => contrastIssues(config.theme.palettes[m]).map((i) => ({ ...i, mode: m })));
   if (issues.length === 0) return null;
   const fixAll = () =>
     patch((c) => {
-      for (const issue of contrastIssues(c.theme.palette)) {
-        c.theme.palette[issue.key] = fixContrast(c.theme.palette[issue.key], c.theme.palette[issue.against], issue.min);
+      for (const m of activeModes(c)) {
+        const p = c.theme.palettes[m];
+        for (const issue of contrastIssues(p)) p[issue.key] = fixContrast(p[issue.key], p[issue.against], issue.min);
       }
       c.theme.paletteId = 'custom';
     });
   return (
     <div className="glass rounded-2xl !border-amber-300/40 p-4 space-y-2" role="alert">
-      <div className="flex items-center gap-2 text-sm font-bold text-amber-200">
+      <div className="flex items-center gap-2 text-sm font-bold text-st-warn">
         <AlertTriangle size={16} />
         خوانایی رنگ‌ها کافی نیست
       </div>
-      <ul className="text-xs text-amber-100/90 space-y-1 list-disc ps-5">
+      <ul className="text-xs text-st-warn space-y-1 list-disc ps-5">
         {issues.map((i) => (
-          <li key={`${i.key}-${i.against}`}>
+          <li key={`${i.mode}-${i.key}-${i.against}`}>
+            {modes.length > 1 && `حالت ${MODE_NAMES[i.mode]}: `}
             {i.message} ({paletteLabel(i.key)} روی {paletteLabel(i.against)}: {i.ratio.toFixed(1)} از حداقل {i.min})
           </li>
         ))}
       </ul>
-      <button type="button" className={`${buttonClass.ghost} !border-amber-400/50 !text-amber-100`} onClick={fixAll}>
+      <button type="button" className={`${buttonClass.ghost} !border-amber-400/50 !text-st-warn`} onClick={fixAll}>
         <Wand2 size={15} />
         اصلاح خودکار رنگ‌ها
       </button>
@@ -529,9 +618,9 @@ function EditorLink({ slug }: { slug: string }) {
   const url = `${goalUrl(slug)}&edit`;
   return (
     <div className="space-y-1.5">
-      <span className="text-xs font-medium text-violet-50/85">لینک ثبت امتیاز برای مسئول تیم</span>
+      <span className="text-xs font-medium text-st-fg/85">لینک ثبت امتیاز برای مسئول تیم</span>
       <div className="flex items-center gap-2">
-        <code className="flex-1 min-w-0 truncate text-xs bg-white/[0.06] border border-white/10 rounded-xl px-2 py-2 text-white/80" dir="ltr">
+        <code className="flex-1 min-w-0 truncate text-xs bg-st-fill/[0.06] border border-st-line/10 rounded-xl px-2 py-2 text-st-fg/80" dir="ltr">
           {url}
         </code>
         <button

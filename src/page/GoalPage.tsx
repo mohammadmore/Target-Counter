@@ -1,7 +1,8 @@
 import { Suspense, useEffect, useRef, useState } from 'react';
-import { Camera, Eye, Film, Loader2, Settings, WifiOff } from 'lucide-react';
-import type { GoalConfig, Lang } from '../goal/types';
-import { assetUrl, ensureFont, themeStyle } from '../goal/theme';
+import { Camera, Eye, Film, Loader2, Moon, Settings, Sun, WifiOff } from 'lucide-react';
+import type { ColorMode, GoalConfig, Lang } from '../goal/types';
+import { assetUrl, ensureFont, logoFor, paletteFor, themeStyle } from '../goal/theme';
+import Credit, { PosterCredit } from '../components/Credit';
 import { dirOf, fillTemplate, formatNumber, formatPercent } from '../lib/format';
 import { vizById } from '../viz';
 import Background from './Background';
@@ -21,6 +22,10 @@ export interface GoalPageProps {
   score: number;
   target: number;
   lang: Lang;
+  /** Resolved colour mode for this render. */
+  mode: ColorMode;
+  /** Present when the goal offers both modes: shows the sun/moon toggle. */
+  onModeChange?: (mode: ColorMode) => void;
   onLangChange?: (lang: Lang) => void;
   /** Wizard thumbnail-style rendering inside a frame (no toolbar/title/confetti). */
   preview?: boolean;
@@ -38,6 +43,8 @@ export default function GoalPage({
   score,
   target,
   lang,
+  mode,
+  onModeChange,
   onLangChange,
   preview = false,
   connectionError,
@@ -52,6 +59,8 @@ export default function GoalPage({
   const remaining = Math.max(safeTarget - score, 0);
   const goalReached = score >= safeTarget;
   const viz = config.visualization;
+  const palette = paletteFor(config, mode);
+  const logo = logoFor(config, mode);
   const Viz = vizById(viz.type).component;
 
   // Never show the same number twice: the counter style already shows one of them big.
@@ -81,9 +90,22 @@ export default function GoalPage({
   useEffect(() => {
     if (preview) return;
     document.title = fillTemplate(texts.pageTitle || texts.title || config.name, vars);
-    document.querySelector('meta[name=theme-color]')?.setAttribute('content', config.theme.palette.bg);
+    document.querySelector('meta[name=theme-color]')?.setAttribute('content', palette.bg);
+    document.documentElement.style.background = palette.bg;
     // vars change with every score update; the title only needs the texts
-  }, [preview, texts.pageTitle, texts.title, config.name, config.theme.palette.bg]);
+  }, [preview, texts.pageTitle, texts.title, config.name, palette.bg]);
+
+  // Organisation logo as the browser tab icon (if chosen in the wizard).
+  useEffect(() => {
+    if (preview || !config.logoPlacements.favicon || !logo) return;
+    let link = document.querySelector<HTMLLinkElement>('link[rel=icon]');
+    if (!link) {
+      link = document.createElement('link');
+      link.rel = 'icon';
+      document.head.appendChild(link);
+    }
+    link.href = assetUrl(logo);
+  }, [preview, logo, config.logoPlacements.favicon]);
 
   // Keep "updated 5 minutes ago" fresh.
   useEffect(() => {
@@ -110,7 +132,7 @@ export default function GoalPage({
       if (cancelled) return;
       confettiReset = () => confetti.reset();
       const end = Date.now() + CONFETTI_DURATION_MS;
-      const p = config.theme.palette;
+      const p = palette;
       const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 100, colors: ['#ffffff', p.primaryLight, p.primary, p.primaryDark] };
       const rand = (min: number, max: number) => Math.random() * (max - min) + min;
       interval = setInterval(() => {
@@ -127,7 +149,7 @@ export default function GoalPage({
       clearInterval(interval);
       confettiReset?.();
     };
-  }, [celebrate, preview, replayKey, config.features.confetti, config.theme.palette]);
+  }, [celebrate, preview, replayKey, config.features.confetti, palette]);
 
   const flash = (text: string, shutter: boolean) => {
     setToast({ text, shutter });
@@ -151,7 +173,7 @@ export default function GoalPage({
       const dataUrl = await toPng(pageRef.current, {
         cacheBust: true,
         pixelRatio: isIOS() ? 2 : 3, // iOS Safari crashes on very large canvases
-        backgroundColor: config.theme.palette.bg,
+        backgroundColor: palette.bg,
         filter: (node) => !(node instanceof HTMLElement && node.hasAttribute(SKIP_CAPTURE)),
       });
       if (isIOS()) setPosterUrl(dataUrl);
@@ -183,7 +205,7 @@ export default function GoalPage({
   ].filter(Boolean) as { label: string; value: number; accent: boolean }[];
 
   return (
-    <div ref={pageRef} dir={dirOf(lang)} lang={lang} style={themeStyle(config)} className={`relative ${minH} text-text bg-bg font-goal overflow-hidden selection:bg-primary/30`}>
+    <div ref={pageRef} dir={dirOf(lang)} lang={lang} style={themeStyle(config, mode)} className={`relative ${minH} text-text bg-bg font-goal overflow-hidden selection:bg-primary/30`}>
       <Background config={config} contained={preview} />
 
       {isDraft && (
@@ -193,10 +215,10 @@ export default function GoalPage({
         </div>
       )}
 
-      <main className={`relative z-40 ${minH} flex flex-col items-center justify-center gap-[clamp(1rem,3vh,1.8rem)] px-[5vw] py-[6vh] pb-28 text-center`}>
-        {(config.logo || texts.title || texts.subtitle) && (
+      <main className={`relative z-40 ${minH} flex flex-col items-center justify-center gap-[clamp(1rem,3vh,1.8rem)] px-[5vw] py-[6vh] pb-36 text-center`}>
+        {((logo && config.logoPlacements.header) || texts.title || texts.subtitle) && (
           <header className="flex flex-col items-center gap-2">
-            {config.logo && <img src={assetUrl(config.logo)} alt="" className="h-[clamp(48px,9vh,84px)] w-auto object-contain mb-1" />}
+            {logo && config.logoPlacements.header && <img src={assetUrl(logo)} alt="" className="h-[clamp(48px,9vh,84px)] w-auto object-contain mb-1" />}
             {texts.title && (
               <h1 className="text-[clamp(1.6rem,5vw,2.6rem)] font-extrabold leading-tight text-gradient drop-shadow-[0_0_12px_color-mix(in_srgb,var(--color-primary)_30%,transparent)]">
                 {fill(texts.title)}
@@ -272,6 +294,13 @@ export default function GoalPage({
         )}
       </main>
 
+      {/* Only drawn while a poster is being captured */}
+      {capturing && <PosterCredit mode={mode} />}
+      {capturing && logo && config.logoPlacements.poster && !config.logoPlacements.header && (
+        <img src={assetUrl(logo)} alt="" className="absolute top-4 start-4 z-50 h-10 w-auto object-contain" />
+      )}
+      <Credit mode={mode} tone="goal" lang={lang} />
+
       {connectionError && (
         <div
           {...{ [SKIP_CAPTURE]: '' }}
@@ -284,10 +313,20 @@ export default function GoalPage({
       )}
 
       {!preview && (
-        <div {...{ [SKIP_CAPTURE]: '' }} className="fixed bottom-[18px] left-[18px] z-50 flex gap-3" dir="ltr">
+        <div {...{ [SKIP_CAPTURE]: '' }} className="fixed bottom-[18px] max-sm:bottom-[64px] left-[18px] z-50 flex gap-3" dir="ltr">
           {onOpenEditor && (
             <button onClick={onOpenEditor} className={toolbarButton} title={chrome.editScore} aria-label={chrome.editScore}>
               <Settings size={18} strokeWidth={1.5} />
+            </button>
+          )}
+          {onModeChange && (
+            <button
+              onClick={() => onModeChange(mode === 'dark' ? 'light' : 'dark')}
+              className={toolbarButton}
+              title={mode === 'dark' ? chrome.lightMode : chrome.darkMode}
+              aria-label={mode === 'dark' ? chrome.lightMode : chrome.darkMode}
+            >
+              {mode === 'dark' ? <Sun size={18} strokeWidth={1.6} /> : <Moon size={18} strokeWidth={1.6} />}
             </button>
           )}
           {showLangSwitch && (

@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { Monitor, RotateCcw, Smartphone } from 'lucide-react';
+import { Monitor, Moon, RotateCcw, Smartphone, Sun } from 'lucide-react';
 import { hrefFor } from '../router';
-import type { GoalConfig, Lang } from '../goal/types';
+import type { ColorMode, GoalConfig, Lang } from '../goal/types';
+import { resolveMode } from '../goal/theme';
+import { usePlatformProfile } from '../lib/platform';
 import type { PreviewMessage } from '../page/PreviewHost';
 import { LANG_NAMES } from '../goal/presets';
 import { formatNumber } from '../lib/format';
@@ -12,7 +14,21 @@ const DEVICES = {
 } as const;
 
 /** Live preview of the draft page inside a scaled device-sized iframe. */
-export default function PreviewFrame({ config, target, initialScore }: { config: GoalConfig; target: number; initialScore: number }) {
+export default function PreviewFrame({
+  config,
+  target,
+  initialScore,
+  mode,
+  onModeChange,
+}: {
+  config: GoalConfig;
+  target: number;
+  initialScore: number;
+  mode: ColorMode;
+  onModeChange: (m: ColorMode) => void;
+}) {
+  const platform = usePlatformProfile();
+  const shownMode = resolveMode(config, mode);
   const frameRef = useRef<HTMLIFrameElement>(null);
   const boxRef = useRef<HTMLDivElement>(null);
   const [device, setDevice] = useState<keyof typeof DEVICES>('mobile');
@@ -43,9 +59,9 @@ export default function PreviewFrame({ config, target, initialScore }: { config:
 
   useEffect(() => {
     if (!readyCount) return;
-    const message: PreviewMessage = { type: 'goal-preview', config, score, target, lang: previewLang, replay };
+    const message: PreviewMessage = { type: 'goal-preview', config, score, target, lang: previewLang, mode: shownMode, replay, platform };
     frameRef.current?.contentWindow?.postMessage(message, window.location.origin);
-  }, [readyCount, config, score, target, previewLang, replay]);
+  }, [readyCount, config, score, target, previewLang, shownMode, replay, platform]);
 
   const d = DEVICES[device];
   const scale = Math.min(1, boxWidth / d.width);
@@ -61,7 +77,7 @@ export default function PreviewFrame({ config, target, initialScore }: { config:
                 key={key}
                 type="button"
                 onClick={() => setDevice(key)}
-                className={`flex items-center gap-1 px-2.5 py-1 rounded-md ${device === key ? 'btn-aurora' : 'text-violet-100/60 hover:text-white'}`}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-md ${device === key ? 'btn-aurora' : 'text-st-muted hover:text-st-fg'}`}
               >
                 <Icon size={14} />
                 {DEVICES[key].label}
@@ -69,6 +85,17 @@ export default function PreviewFrame({ config, target, initialScore }: { config:
             );
           })}
         </div>
+        {config.theme.mode === 'both' && (
+          <button
+            type="button"
+            onClick={() => onModeChange(shownMode === 'dark' ? 'light' : 'dark')}
+            className="glass-soft flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-st-fg/85 hover:bg-st-fill/10"
+            title="پیش‌نمایش حالت دیگر"
+          >
+            {shownMode === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
+            {shownMode === 'dark' ? 'روشن' : 'تاریک'}
+          </button>
+        )}
         {config.languages.length > 1 && (
           <select value={previewLang} onChange={(e) => setLang(e.target.value as Lang)} className="studio-field rounded-xl px-2 py-1.5">
             {config.languages.map((l) => (
@@ -78,23 +105,23 @@ export default function PreviewFrame({ config, target, initialScore }: { config:
             ))}
           </select>
         )}
-        <button type="button" onClick={() => setReplay((r) => r + 1)} className="glass-soft flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-violet-50/85 hover:bg-white/10">
+        <button type="button" onClick={() => setReplay((r) => r + 1)} className="glass-soft flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-st-fg/85 hover:bg-st-fill/10">
           <RotateCcw size={14} />
           پخش دوباره
         </button>
       </div>
 
-      <label className="flex items-center gap-3 text-xs text-violet-100/60">
+      <label className="flex items-center gap-3 text-xs text-st-muted">
         <span className="shrink-0">پیشرفت آزمایشی</span>
         <input type="range" min={0} max={100} value={percent} onChange={(e) => setPercent(Number(e.target.value))} className="flex-1 accent-fuchsia-500" />
-        <span className="w-10 text-white/85 font-mono" dir="ltr">
+        <span className="w-10 text-st-fg/85 font-mono" dir="ltr">
           {formatNumber(percent, 'fa')}%
         </span>
       </label>
-      {percent === 100 && config.features.celebration && <p className="text-[0.7rem] text-pink-300 -mt-1">حالت جشن رسیدن به هدف نمایش داده می‌شود.</p>}
+      {percent === 100 && config.features.celebration && <p className="text-[0.7rem] text-st-accent -mt-1">حالت جشن رسیدن به هدف نمایش داده می‌شود.</p>}
 
       <div ref={boxRef} className="w-full flex-1 min-h-0">
-        <div dir="ltr" className="mx-auto rounded-[26px] border-[5px] border-white/15 bg-black overflow-hidden shadow-[0_30px_80px_-20px_rgba(124,58,237,0.65),0_0_0_1px_rgba(255,255,255,0.08)]" style={{ width: d.width * scale + 8, height: d.height * scale + 8 }}>
+        <div dir="ltr" className="mx-auto rounded-[26px] border-[5px] border-st-line/15 bg-black overflow-hidden shadow-[0_30px_80px_-20px_rgba(124,58,237,0.65),0_0_0_1px_rgba(255,255,255,0.08)]" style={{ width: d.width * scale + 8, height: d.height * scale + 8 }}>
           <iframe
             ref={frameRef}
             src={hrefFor({ kind: 'preview' })}

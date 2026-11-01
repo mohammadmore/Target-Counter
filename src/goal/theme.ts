@@ -2,7 +2,7 @@ import type { CSSProperties } from 'react';
 import kiyanBg from '../assets/kiyanbg.webp';
 import { FONTS } from './presets';
 import { contrastRatio } from './quality';
-import type { GoalConfig } from './types';
+import type { ColorMode, GoalConfig, Palette } from './types';
 
 const BUILTIN_IMAGES: Record<string, string> = { 'builtin:kiyan': kiyanBg };
 
@@ -20,8 +20,18 @@ const RADIUS = { sharp: '4px', soft: '12px', round: '24px' } as const;
 /** Light backgrounds need darker error text and softer shadows than dark ones. */
 export const isLightPalette = (bg: string) => contrastRatio(bg, '#000000') > contrastRatio(bg, '#ffffff');
 
-export function themeStyle(config: GoalConfig): CSSProperties {
-  const p = config.theme.palette;
+/** The mode a page is shown in: fixed by the goal, or the visitor's choice when it offers both. */
+export function resolveMode(config: GoalConfig, preferred: ColorMode): ColorMode {
+  return config.theme.mode === 'both' ? preferred : config.theme.mode;
+}
+
+export const paletteFor = (config: GoalConfig, mode: ColorMode): Palette => config.theme.palettes[mode];
+
+/** Organisation logo for this mode (the dark variant falls back to the main logo). */
+export const logoFor = (config: GoalConfig, mode: ColorMode) => (mode === 'dark' && config.logoDark ? config.logoDark : config.logo);
+
+export function themeStyle(config: GoalConfig, mode: ColorMode): CSSProperties {
+  const p = paletteFor(config, mode);
   const light = isLightPalette(p.bg);
   const font = FONTS.find((f) => f.id === config.theme.font.id) ?? FONTS[0];
   return {
@@ -37,6 +47,7 @@ export function themeStyle(config: GoalConfig): CSSProperties {
     '--shade': light ? '0.14' : '0.6',
     '--font-goal': `${font.family}, 'Vazirmatn', Tahoma, sans-serif`,
     '--radius-goal': RADIUS[config.theme.radius],
+    colorScheme: light ? 'light' : 'dark',
   } as CSSProperties;
 }
 

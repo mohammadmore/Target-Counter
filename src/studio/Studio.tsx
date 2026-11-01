@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Sparkles, Copy, ExternalLink, Home, Loader2, LogOut, Palette, PenLine, Plus, Star, Trash2, CopyPlus } from 'lucide-react';
+import { Settings2, Sparkles, Copy, ExternalLink, Home, Loader2, LogOut, Palette, PenLine, Plus, Star, Trash2, CopyPlus } from 'lucide-react';
 import { api, clearToken, isDevStorage, loadToken, messageFor, storeToken, ApiError, type GoalSummary } from '../lib/api';
 import { formatNumber, formatPercent } from '../lib/format';
 import { goalUrl, hrefFor, navigate, type Route } from '../router';
@@ -10,9 +10,15 @@ import { timeAgo } from '../page/chrome';
 const STALE_AFTER_DAYS = 7;
 import { buttonClass, inputClass } from './ui';
 import Wizard from './Wizard';
+import Settings from './Settings';
+import { ModeToggle, StudioModeContext } from './mode';
+import Credit from '../components/Credit';
+import { STUDIO_MODE_KEY, useColorMode } from '../lib/colorMode';
+import { setPlatformProfile } from '../lib/platform';
 
 export default function Studio({ route }: { route: Exclude<Route, { kind: 'goal' } | { kind: 'preview' }> }) {
   const [token, setToken] = useState<string | null>(() => loadToken('platform'));
+  const [mode, setMode] = useColorMode(STUDIO_MODE_KEY);
   // Session expired mid-work: ask for the password in a dialog over the current
   // screen instead of unmounting it, so nothing the admin was doing is lost.
   const [reauth, setReauth] = useState(false);
@@ -20,6 +26,13 @@ export default function Studio({ route }: { route: Exclude<Route, { kind: 'goal'
   useEffect(() => {
     document.title = 'استودیو هدف‌گذاری';
   }, []);
+
+  // Keep the page behind the app (overscroll, browser UI) in the studio's colours.
+  useEffect(() => {
+    document.documentElement.className = mode === 'light' ? 'studio-boot studio-boot-light' : 'studio-boot';
+    document.documentElement.style.background = '';
+    document.querySelector('meta[name=theme-color]')?.setAttribute('content', mode === 'light' ? '#f3f0ff' : '#0a0718');
+  }, [mode]);
 
   const logout = useCallback(() => {
     clearToken('platform');
@@ -33,7 +46,8 @@ export default function Studio({ route }: { route: Exclude<Route, { kind: 'goal'
   }, []);
 
   return (
-    <div dir="rtl" lang="fa" className="studio-shell min-h-[100dvh] font-vazirmatn">
+    <StudioModeContext.Provider value={{ mode, setMode }}>
+    <div dir="rtl" lang="fa" data-mode={mode} className="studio-shell min-h-[100dvh] font-vazirmatn pb-20">
       <div className="studio-aurora" aria-hidden>
         <span />
         <span />
@@ -46,11 +60,13 @@ export default function Studio({ route }: { route: Exclude<Route, { kind: 'goal'
         </div>
       ) : route.kind === 'wizard' ? (
         <Wizard key={route.slug ?? 'new'} token={token} slug={route.slug} onUnauthorized={requestReauth} />
+      ) : route.kind === 'settings' ? (
+        <Settings token={token} onUnauthorized={requestReauth} />
       ) : (
         <Dashboard token={token} onLogout={logout} onUnauthorized={requestReauth} />
       )}
       {token && reauth && (
-        <div className="fixed inset-0 z-[80] bg-[#0a0718]/60 backdrop-blur-md flex items-center justify-center p-6" role="dialog" aria-modal="true">
+        <div className="fixed inset-0 z-[80] bg-[var(--studio-overlay)] backdrop-blur-md flex items-center justify-center p-6" role="dialog" aria-modal="true">
           <Login
             reauth
             onLogin={(t) => {
@@ -61,7 +77,9 @@ export default function Studio({ route }: { route: Exclude<Route, { kind: 'goal'
           />
         </div>
       )}
+      <Credit mode={mode} tone="studio" />
     </div>
+    </StudioModeContext.Provider>
   );
 }
 
@@ -90,39 +108,40 @@ function Login({ onLogin, reauth = false, onCancel }: { onLogin: (token: string)
 
   return (
     <form
-      className="glass-strong w-full max-w-sm rounded-3xl p-7 space-y-4"
+      className="glass-strong relative w-full max-w-sm rounded-3xl p-7 space-y-4"
       onSubmit={(e) => {
         e.preventDefault();
         submit();
       }}
     >
       <div>
+        {!reauth && <ModeToggle className="absolute top-5 left-5" />}
         <div className="aurora-gradient w-11 h-11 rounded-2xl mb-4 shadow-[0_8px_24px_-6px_rgba(168,85,247,0.8)] flex items-center justify-center">
-          <Sparkles size={20} className="text-white" />
+          <Sparkles size={20} className="text-[#fff]" />
         </div>
         <h1 className="text-xl font-extrabold text-aurora">{reauth ? 'نشست شما منقضی شده است' : 'استودیو هدف‌گذاری'}</h1>
-        <p className="text-sm text-violet-100/65 mt-1.5 leading-relaxed">
+        <p className="text-sm text-st-muted mt-1.5 leading-relaxed">
           {reauth
             ? 'برای ادامه دوباره رمز مدیر را وارد کنید. کارهایی که انجام داده‌اید حفظ شده‌اند و ذخیره‌ی نیمه‌کاره خودکار ادامه پیدا می‌کند.'
             : 'برای ساخت و مدیریت صفحه‌های هدف، رمز مدیر پلتفرم را وارد کنید.'}
         </p>
       </div>
       <input type="password" autoFocus autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} className={inputClass} placeholder="رمز عبور" aria-label="رمز عبور" />
-      <label className="flex items-center gap-2 text-sm text-violet-100/70 cursor-pointer">
+      <label className="flex items-center gap-2 text-sm text-st-muted cursor-pointer">
         <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} className="w-4 h-4 accent-fuchsia-500" />
         مرا در این دستگاه به خاطر بسپار (۳۰ روز)
       </label>
-      {error && <p className="text-sm text-rose-300" role="alert">{error}</p>}
+      {error && <p className="text-sm text-st-danger" role="alert">{error}</p>}
       <button type="submit" className={`${buttonClass.primary} w-full`} disabled={busy || !password}>
         {busy && <Loader2 size={16} className="animate-spin" />}
         ورود
       </button>
       {onCancel && (
-        <button type="button" onClick={onCancel} className="block w-full text-center text-xs text-violet-100/45 hover:text-white">
+        <button type="button" onClick={onCancel} className="block w-full text-center text-xs text-st-muted/80 hover:text-st-fg">
           خروج کامل
         </button>
       )}
-      {import.meta.env.DEV && <p className="text-[0.7rem] text-violet-100/45">حالت توسعه: هر رمزی پذیرفته می‌شود.</p>}
+      {import.meta.env.DEV && <p className="text-[0.7rem] text-st-muted/80">حالت توسعه: هر رمزی پذیرفته می‌شود.</p>}
     </form>
   );
 }
@@ -145,6 +164,7 @@ function Dashboard({ token, onLogout, onUnauthorized }: { token: string; onLogou
     try {
       const data = await api.list(token);
       setGoals(data.goals);
+      setPlatformProfile(data.platform);
       setDefaultGoal(data.defaultGoal);
       setError('');
     } catch (err) {
@@ -197,13 +217,18 @@ function Dashboard({ token, onLogout, onUnauthorized }: { token: string; onLogou
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-extrabold text-aurora">صفحه‌های هدف</h1>
-          <p className="text-sm text-violet-100/60 mt-1">هر صفحه یک هدف تیمی یا سازمانی با ظاهر و سبک نمایش مخصوص خودش است.</p>
+          <p className="text-sm text-st-muted mt-1">هر صفحه یک هدف تیمی یا سازمانی با ظاهر و سبک نمایش مخصوص خودش است.</p>
         </div>
         <div className="flex gap-2">
           <button className={buttonClass.primary} onClick={() => navigate({ kind: 'wizard', slug: null })}>
             <Plus size={16} />
             ساخت صفحه‌ی جدید
           </button>
+          <button className={buttonClass.ghost} onClick={() => navigate({ kind: 'settings' })} title="تنظیمات پایه">
+            <Settings2 size={16} />
+            <span className="max-sm:hidden">تنظیمات</span>
+          </button>
+          <ModeToggle />
           <button className={buttonClass.ghost} onClick={onLogout} title="خروج">
             <LogOut size={16} />
           </button>
@@ -211,19 +236,19 @@ function Dashboard({ token, onLogout, onUnauthorized }: { token: string; onLogou
       </header>
 
       {isDevStorage() && (
-        <p className="glass-soft text-xs rounded-xl !border-amber-300/30 text-amber-100 px-3 py-2">
+        <p className="glass-soft text-xs rounded-xl !border-amber-300/30 text-st-warn px-3 py-2">
           حالت توسعه: سرور PHP در دسترس نیست و داده‌ها فقط در همین مرورگر ذخیره می‌شوند.
         </p>
       )}
-      {error && <p className="text-sm text-rose-300">{error}</p>}
+      {error && <p className="text-sm text-st-danger">{error}</p>}
 
       {goals === null ? (
         <div className="flex justify-center py-16">
-          <Loader2 className="animate-spin text-violet-200/60" />
+          <Loader2 className="animate-spin text-st-muted" />
         </div>
       ) : goals.length === 0 ? (
         <div className="glass rounded-3xl !border-dashed p-12 text-center space-y-3">
-          <p className="text-violet-50/80">هنوز هیچ صفحه‌ای نساخته‌اید.</p>
+          <p className="text-st-fg/80">هنوز هیچ صفحه‌ای نساخته‌اید.</p>
           <button className={buttonClass.primary} onClick={() => navigate({ kind: 'wizard', slug: null })}>
             <Plus size={16} />
             ساخت اولین صفحه
@@ -243,14 +268,14 @@ function Dashboard({ token, onLogout, onUnauthorized }: { token: string; onLogou
                     <div className="flex items-center gap-2">
                       <h2 className="font-bold truncate">{name}</h2>
                       {g.slug === defaultGoal && (
-                        <span className="shrink-0 inline-flex items-center gap-1 text-[0.65rem] px-1.5 py-0.5 rounded-md bg-violet-500/25 text-violet-100 border border-violet-300/20">
+                        <span className="shrink-0 inline-flex items-center gap-1 text-[0.65rem] px-1.5 py-0.5 rounded-md bg-violet-500/25 text-st-fg border border-violet-300/20">
                           <Home size={11} /> صفحه‌ی اصلی
                         </span>
                       )}
-                      {!g.published && <span className="shrink-0 text-[0.65rem] px-1.5 py-0.5 rounded-md bg-white/10 text-white/80 border border-white/15">منتشر نشده</span>}
-                      {g.published && g.hasDraft && <span className="shrink-0 text-[0.65rem] px-1.5 py-0.5 rounded-md bg-sky-400/15 text-sky-200 border border-sky-300/20">پیش‌نویس دارد</span>}
+                      {!g.published && <span className="shrink-0 text-[0.65rem] px-1.5 py-0.5 rounded-md bg-st-fill/10 text-st-fg/80 border border-st-line/15">منتشر نشده</span>}
+                      {g.published && g.hasDraft && <span className="shrink-0 text-[0.65rem] px-1.5 py-0.5 rounded-md bg-sky-400/15 text-st-info border border-sky-300/20">پیش‌نویس دارد</span>}
                     </div>
-                    <a href={hrefFor({ kind: 'goal', slug: g.slug, edit: false })} target="_blank" rel="noreferrer" className="text-xs text-violet-100/45 font-mono hover:text-white" dir="ltr">
+                    <a href={hrefFor({ kind: 'goal', slug: g.slug, edit: false })} target="_blank" rel="noreferrer" className="text-xs text-st-muted/80 font-mono hover:text-st-fg" dir="ltr">
                       ?g={g.slug}
                     </a>
                   </div>
@@ -259,14 +284,14 @@ function Dashboard({ token, onLogout, onUnauthorized }: { token: string; onLogou
                   </span>
                 </div>
 
-                <div className="h-2 rounded-full bg-white/10 overflow-hidden">
+                <div className="h-2 rounded-full bg-st-fill/10 overflow-hidden">
                   <div className="h-full aurora-gradient rounded-full shadow-[0_0_12px_rgba(168,85,247,0.7)]" style={{ width: `${ratio * 100}%` }} />
                 </div>
                 <div className="flex flex-wrap justify-between gap-2 text-xs">
-                  <span className="text-violet-100/65" dir="ltr">
+                  <span className="text-st-muted" dir="ltr">
                     {formatNumber(g.score, 'fa')} / {formatNumber(g.target, 'fa')}
                   </span>
-                  <span className={stale ? 'text-amber-300' : 'text-violet-100/45'} title={stale ? 'مدتی است امتیازی ثبت نشده؛ عدد صفحه ممکن است قدیمی باشد' : undefined}>
+                  <span className={stale ? 'text-st-warn' : 'text-st-muted/80'} title={stale ? 'مدتی است امتیازی ثبت نشده؛ عدد صفحه ممکن است قدیمی باشد' : undefined}>
                     {stale && '⚠ '}آخرین ثبت امتیاز: {timeAgo(g.scoreUpdatedAt, 'fa')}
                   </span>
                 </div>

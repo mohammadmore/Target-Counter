@@ -3,8 +3,9 @@
  * Goal platform API (PHP 7.4+ / MySQL, mysqlnd).
  *
  * Public
+ *   GET  api.php?platform               -> studio profile {logoLight, logoDark, contacts[]}
  *   GET  api.php?goal=<slug>[&draft=<token>]
- *        -> {slug, config, score, target, updatedAt, scoreUpdatedAt, isDraft}
+ *        -> {slug, config, score, target, updatedAt, scoreUpdatedAt, isDraft, platform}
  *        (no slug = default goal; renamed slugs resolve through aliases;
  *         unpublished goals and drafts need the draft preview token)
  *
@@ -27,6 +28,7 @@
  *         "score"?,"expectedScore"?,"editorPassword"?: string|null}
  *        publish=false stores a draft (live page unchanged) and returns a preview token
  *   POST {"action":"discardDraft","goal"} | {"action":"delete","goal"} | {"action":"setDefault","goal"}
+ *   POST {"action":"savePlatform","profile":{logoLight, logoDark, contacts:[{type,value,label}]}}
  *   POST multipart/form-data action=upload kind=image|font file=<file>
  *
  * Secrets live in kiyan-config.php (see server/kiyan-config.example.php).
@@ -48,6 +50,8 @@ const HISTORY_LIMIT = 30;
 const SCHEMA_VERSION = 2;
 const SLUG_PATTERN = '/^[a-z0-9](?:[a-z0-9-]{0,46}[a-z0-9])?$/';
 const UPLOAD_DIR = 'uploads';
+const CONTACT_TYPES = ['website', 'email', 'phone', 'whatsapp', 'telegram', 'instagram', 'linkedin', 'link'];
+const MAX_CONTACTS = 12;
 
 function respond($status, $body)
 {
@@ -122,6 +126,53 @@ function read_note($data)
         return null;
     }
     return function_exists('mb_substr') ? mb_substr($note, 0, MAX_NOTE_CHARS) : substr($note, 0, MAX_NOTE_CHARS * 2);
+}
+
+function clip($value, $max)
+{
+    $value = trim((string)$value);
+    return function_exists('mb_substr') ? mb_substr($value, 0, $max) : substr($value, 0, $max);
+}
+
+function safe_asset($value)
+{
+    $value = is_string($value) ? trim($value) : '';
+    if ($value === '' || preg_match('#^uploads/[A-Za-z0-9._-]+$#', $value) || preg_match('#^https://[^\s"\'()<>\\\\]+$#', $value)) {
+        return $value;
+    }
+    return '';
+}
+
+/** The studio's own branding shown in every page's credit (Asva logos + contact links). */
+function platform_profile($conn)
+{
+    $raw = json_decode((string)get_setting($conn, 'platform_profile'), true);
+    return sanitize_profile(is_array($raw) ? $raw : []);
+}
+
+function sanitize_profile($raw)
+{
+    $contacts = [];
+    if (isset($raw['contacts']) && is_array($raw['contacts'])) {
+        foreach ($raw['contacts'] as $c) {
+            if (!is_array($c) || !isset($c['type'], $c['value']) || !in_array($c['type'], CONTACT_TYPES, true)) {
+                continue;
+            }
+            $value = clip($c['value'], 200);
+            if ($value === '') {
+                continue;
+            }
+            $contacts[] = ['type' => $c['type'], 'value' => $value, 'label' => clip(isset($c['label']) ? $c['label'] : '', 60)];
+            if (count($contacts) >= MAX_CONTACTS) {
+                break;
+            }
+        }
+    }
+    return [
+        'logoLight' => safe_asset(isset($raw['logoLight']) ? $raw['logoLight'] : ''),
+        'logoDark' => safe_asset(isset($raw['logoDark']) ? $raw['logoDark'] : ''),
+        'contacts' => $contacts,
+    ];
 }
 
 // ---------------------------------------------------------------------------
@@ -510,6 +561,9 @@ function handle_upload()
 try {
     if ($method === 'GET') {
         $conn = db_connect($config);
+        if (isset($_GET['platform'])) {
+            respond(200, platform_profile($conn));
+        }
         $slug = isset($_GET['goal']) && $_GET['goal'] !== '' ? read_slug($_GET['goal']) : get_setting($conn, 'default_goal');
         $row = resolve_goal($conn, $slug);
         if (!$row) {
@@ -520,7 +574,7 @@ try {
         if (!$row['published'] && !$previewing) {
             fail(404, 'not_found');
         }
-        respond(200, public_goal($row, $previewing));
+        respond(200, public_goal($row, $previewing) + ['platform' => platform_profile($conn)]);
     }
 
     if ($method !== 'POST') {
@@ -726,7 +780,7 @@ try {
                     'published' => (bool)$row['published'],
                 ];
             }
-            respond(200, ['goals' => $goals, 'defaultGoal' => get_setting($conn, 'default_goal')]);
+            respond(200, ['goals' => $goals, 'defaultGoal' => get_setting($conn, 'default_goal'), 'platform' => platform_profile($conn)]);
 
         case 'get':
             require_platform($config, $conn);
@@ -882,6 +936,15 @@ try {
                 set_setting($conn, 'default_goal', $next ? $next['slug'] : '');
             }
             respond(200, ['ok' => true]);
+
+        case 'savePlatform':
+            require_platform($config, $conn);
+            if (!isset($data['profile']) || !is_array($data['profile'])) {
+                fail(400, 'invalid_request');
+            }
+            $profile = sanitize_profile($data['profile']);
+            set_setting($conn, 'platform_profile', json_encode($profile, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+            respond(200, $profile);
 
         case 'setDefault':
             require_platform($config, $conn);

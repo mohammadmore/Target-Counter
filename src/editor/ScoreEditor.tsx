@@ -2,8 +2,9 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { ArrowRight, History, Loader2, LogOut, Minus, Plus, Undo2 } from 'lucide-react';
 import { api, ApiError, clearToken, loadToken, storeToken, type GoalPayload, type HistoryEntry, type ScoreUpdate } from '../lib/api';
 import { dirOf, formatNumber, formatPercent, fromDigits, toDigits, type Lang } from '../lib/format';
-import type { GoalConfig } from '../goal/types';
-import { ensureFont, themeStyle } from '../goal/theme';
+import type { ColorMode, GoalConfig } from '../goal/types';
+import { assetUrl, ensureFont, logoFor, themeStyle } from '../goal/theme';
+import Credit from '../components/Credit';
 import { timeAgo } from '../page/chrome';
 import NumberInput from '../components/NumberInput';
 import DigitWheel, { wheelColor } from './DigitWheel';
@@ -18,6 +19,7 @@ interface ScoreEditorProps {
   goal: GoalPayload;
   config: GoalConfig;
   lang: Lang;
+  colorMode: ColorMode;
   mutate: <T extends GoalPayload>(run: () => Promise<T>) => Promise<T>;
   refresh: () => Promise<GoalPayload>;
   onBack: () => void;
@@ -28,7 +30,7 @@ interface ScoreEditorProps {
  * Default flow is "add what happened today"; setting the total is guarded
  * against concurrent edits, and every change can be traced and undone.
  */
-export default function ScoreEditor({ goal, config, lang, mutate, refresh, onBack }: ScoreEditorProps) {
+export default function ScoreEditor({ goal, config, lang, colorMode, mutate, refresh, onBack }: ScoreEditorProps) {
   const t = EDITOR_STRINGS[lang];
   const errors = EDITOR_ERRORS[lang];
   const errorText = (err: unknown) => (err instanceof ApiError ? errors[err.code] ?? errors.unknown! : errors.unknown!);
@@ -154,17 +156,23 @@ export default function ScoreEditor({ goal, config, lang, mutate, refresh, onBac
   };
 
   const goalName = config.texts[lang].title || config.name;
+  const logo = config.logoPlacements.editor ? logoFor(config, colorMode) : '';
+  const logoImg = logo ? <img src={assetUrl(logo)} alt="" className="h-10 w-auto max-w-[140px] object-contain mb-3" /> : null;
   const inputClass =
     'w-full p-[0.65rem_0.9rem] bg-bg border border-primary/30 rounded-[8px] text-text text-[1.05rem] focus:outline-none focus:border-primary placeholder:text-text-muted/60';
   const primaryButton =
     'w-full flex items-center justify-center gap-2 p-[0.8rem_1rem] rounded-[8px] bg-gradient-to-b from-primary-light to-primary text-bg font-bold text-[0.95rem] transition-all hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed';
 
   const shell = (children: ReactNode) => (
-    <div style={themeStyle(config)} dir={dirOf(lang)} lang={lang} className="relative min-h-[100dvh] bg-bg text-text font-goal">
+    <div style={themeStyle(config, colorMode)} dir={dirOf(lang)} lang={lang} className="relative min-h-[100dvh] bg-bg text-text font-goal">
       <div className="absolute inset-0 bg-glow pointer-events-none" />
-      <div className="relative z-10 min-h-[100dvh] flex items-start sm:items-center justify-center px-4 py-8">
-        <div className="w-full max-w-[440px] goal-card !rounded-[14px] p-[clamp(1.1rem,4vw,1.8rem)]">{children}</div>
+      <div className="relative z-10 min-h-[100dvh] flex items-start sm:items-center justify-center px-4 pt-8 pb-24">
+        <div className="w-full max-w-[440px] goal-card !rounded-[14px] p-[clamp(1.1rem,4vw,1.8rem)]">
+          {logoImg}
+          {children}
+        </div>
       </div>
+      <Credit mode={colorMode} tone="goal" lang={lang} />
     </div>
   );
 
