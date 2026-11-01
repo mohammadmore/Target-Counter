@@ -1,0 +1,14 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    match /config/main {
+      // Allow read/write for everyone so the client can update with a custom frontend password
+      allow read, write: if true;
+    }
+  }
+}

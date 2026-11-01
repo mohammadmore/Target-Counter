@@ -1,0 +1,75 @@
+@import "tailwindcss";
+
+@font-face {
+  font-family: 'Vazirmatn';
+  src: url('/fonts/Vazirmatn-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Vazirmatn';
+  src: url('/fonts/Vazirmatn-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@theme {
+  --color-bg-main: #060605;
+  --color-bg-soft: #0c0b09;
+  --color-gold-1: #d4af37;
+  --color-gold-2: #f6dd8e;
+  --color-gold-3: #8a6c1f;
+  --color-pearl: #f3efe4;
+  --color-pearl-dim: rgba(243, 239, 228, 0.55);
+  --color-ring-track: #17150f;
+  --color-err: #c98a7a;
+  
+  --font-vazirmatn: 'Vazirmatn', 'Tahoma', sans-serif;
+}
+
+@layer utilities {
+  .dir-ltr {
+    direction: ltr;
+  }
+  .unicode-bidi-plaintext {
+    unicode-bidi: plaintext;
+  }
+}
+
+@layer components {
+  .bg-fallback {
+    background:
+      radial-gradient(ellipse 60% 45% at 50% 30%, rgba(212,175,55,.14), transparent 60%),
+      radial-gradient(ellipse 70% 50% at 50% 100%, rgba(138,108,31,.10), transparent 65%),
+      var(--color-bg-main);
+    animation: bgPulse 12s ease-in-out infinite;
+  }
+
+  .particle {
+    background: radial-gradient(circle, var(--color-gold-2) 0%, var(--color-gold-1) 45%, transparent 72%);
+    box-shadow: 0 0 6px rgba(212,175,55,.65);
+    animation-name: floatUp;
+    animation-timing-function: ease-in;
+    animation-iteration-count: infinite;
+  }
+}
+
+@keyframes bgPulse {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.12); }
+}
+
+@keyframes floatUp {
+  0%   { transform: translateY(0) translateX(0); opacity: 0; }
+  12%  { opacity: var(--op, .75); }
+  50%  { transform: translateY(-52vh) translateX(var(--drift, 12px)); }
+  88%  { opacity: var(--op, .75); }
+  100% { transform: translateY(-104vh) translateX(calc(var(--drift, 12px) * 2)); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .particle, .bg-fallback { animation: none !important; }
+}
