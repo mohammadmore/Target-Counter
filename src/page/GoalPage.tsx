@@ -187,7 +187,7 @@ export default function GoalPage({
       <Background config={config} contained={preview} />
 
       {isDraft && (
-        <div {...{ [SKIP_CAPTURE]: '' }} className="fixed top-0 inset-x-0 z-[60] flex items-center justify-center gap-2 bg-amber-400 text-zinc-950 text-xs font-bold py-1.5 px-3 text-center">
+        <div {...{ [SKIP_CAPTURE]: '' }} className="fixed top-0 inset-x-0 z-[60] flex items-center justify-center gap-2 bg-primary text-bg text-xs font-bold shadow-[0_2px_12px_rgb(0_0_0/var(--shade))] py-1.5 px-3 text-center">
           <Eye size={14} />
           {chrome.draftBanner}
         </div>
@@ -276,10 +276,10 @@ export default function GoalPage({
         <div
           {...{ [SKIP_CAPTURE]: '' }}
           role="status"
-          className="fixed top-3 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-black/75 border border-red-400/40 text-red-200 text-xs px-3 py-1.5 rounded-full backdrop-blur-md"
+          className="fixed top-2 left-1/2 -translate-x-1/2 z-50 flex items-center gap-1.5 whitespace-nowrap bg-surface/95 border border-danger/50 text-danger text-[11px] shadow-[0_4px_16px_rgb(0_0_0/var(--shade))] px-3 py-1.5 rounded-full backdrop-blur-md"
         >
-          <WifiOff size={14} />
-          <span>{chrome.connectionLost}</span>
+          <WifiOff size={13} />
+          <span>{chrome.offline}</span>
         </div>
       )}
 
@@ -313,7 +313,7 @@ export default function GoalPage({
           <div
             {...{ [SKIP_CAPTURE]: '' }}
             role="status"
-            className="anim-fade-up fixed top-[40px] left-1/2 -translate-x-1/2 z-[101] flex items-center gap-2 bg-black/80 border border-primary/30 text-primary-light px-6 py-3 rounded-full font-medium backdrop-blur-md shadow-lg pointer-events-none whitespace-nowrap"
+            className="anim-fade-up fixed top-[40px] left-1/2 -translate-x-1/2 z-[101] flex items-center gap-2 bg-surface/90 border border-primary/30 text-primary-light px-6 py-3 rounded-full font-medium backdrop-blur-md shadow-lg pointer-events-none whitespace-nowrap"
           >
             {capturing && !toast && <Loader2 size={16} className="animate-spin" />}
             {toast ? toast.text : chrome.posterWorking}
@@ -323,7 +323,7 @@ export default function GoalPage({
       {posterUrl && (
           <div
             {...{ [SKIP_CAPTURE]: '' }}
-            className="anim-fade-in fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4 backdrop-blur-sm"
+            className="anim-fade-in fixed inset-0 z-[100] bg-bg/90 flex items-center justify-center p-4 backdrop-blur-sm"
           >
             <div className="relative max-w-sm w-full bg-surface border border-primary/30 rounded-2xl p-4 flex flex-col items-center gap-4">
               <h3 className="text-primary-light font-bold text-lg mt-2">{chrome.posterReady}</h3>

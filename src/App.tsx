@@ -1,6 +1,9 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
-import { useGoal, writeGoalCache } from './hooks/useGoal';
+import { readGoalCache, useGoal, writeGoalCache } from './hooks/useGoal';
 import { normalizeConfig } from './goal/normalize';
+import { createDefaultConfig } from './goal/presets';
+import { themeStyle } from './goal/theme';
+import type { GoalConfig } from './goal/types';
 import { isLang, type Lang } from './lib/format';
 import { canEditOnThisDevice } from './lib/api';
 import { hrefFor, navigate, useRoute } from './router';
@@ -12,26 +15,39 @@ import PreviewHost from './page/PreviewHost';
 const Studio = lazy(() => import('./studio/Studio'));
 const ScoreEditor = lazy(() => import('./editor/ScoreEditor'));
 
-/** Neutral loader: the goal's colours aren't known yet, so don't flash a wrong theme. */
-function Spinner({ message }: { message?: string }) {
+/** The goal's own look while it loads: remembered from the last visit, else the default palette. */
+function fallbackConfig(slug: string | null): GoalConfig {
+  const cached = readGoalCache(slug);
+  return cached ? normalizeConfig(cached.config) : createDefaultConfig();
+}
+
+function Spinner({ config, message }: { config: GoalConfig; message?: string }) {
   return (
-    <div className="min-h-[100dvh] flex flex-col gap-4 items-center justify-center text-white/70 font-vazirmatn" role="status" aria-label={message ?? 'Loading'}>
-      <div className="w-10 h-10 border-[3px] border-white/15 border-t-white/70 rounded-full animate-spin" />
+    <div
+      style={themeStyle(config)}
+      className="min-h-[100dvh] flex flex-col gap-4 items-center justify-center bg-bg text-text-muted font-goal"
+      role="status"
+      aria-label={message ?? 'Loading'}
+    >
+      <div className="w-10 h-10 border-[3px] border-primary/20 border-t-primary-light rounded-full animate-spin" />
       {message && <p className="text-sm px-6 text-center">{message}</p>}
     </div>
   );
 }
 
-function Notice({ title, hint, action }: { title: string; hint?: string; action?: { href: string; label: string } }) {
+function Notice({ config, title, hint, action }: { config: GoalConfig; title: string; hint?: string; action?: { href: string; label: string } }) {
   return (
-    <div dir="rtl" className="min-h-[100dvh] flex flex-col gap-3 items-center justify-center px-6 text-center text-zinc-100 font-vazirmatn bg-zinc-950">
-      <p className="text-lg font-bold">{title}</p>
-      {hint && <p className="text-sm text-zinc-400 max-w-md leading-relaxed">{hint}</p>}
-      {action && (
-        <a href={action.href} className="mt-2 px-5 py-2 rounded-full border border-amber-400/50 text-amber-200 hover:bg-amber-400/10">
-          {action.label}
-        </a>
-      )}
+    <div style={themeStyle(config)} dir="rtl" className="relative min-h-[100dvh] bg-bg text-text font-goal overflow-hidden">
+      <div className="absolute inset-0 bg-glow pointer-events-none" />
+      <div className="relative min-h-[100dvh] flex flex-col gap-3 items-center justify-center px-6 text-center">
+        <p className="text-lg font-bold text-primary-light">{title}</p>
+        {hint && <p className="text-sm text-text-muted max-w-md leading-relaxed">{hint}</p>}
+        {action && (
+          <a href={action.href} className="mt-2 px-5 py-2 rounded-full border border-primary/50 text-primary-light hover:bg-primary/10">
+            {action.label}
+          </a>
+        )}
+      </div>
     </div>
   );
 }
@@ -57,18 +73,19 @@ function GoalRoute({ slug, edit }: { slug: string | null; edit: boolean }) {
 
   // Remember this page (and its colours) for an instant, flash-free next visit.
   useEffect(() => {
-    if (goal && config && !goal.isDraft) writeGoalCache(slug, goal, config.theme.palette.bg);
+    if (goal && config && !goal.isDraft) writeGoalCache(slug, goal, config.theme.palette.bg, config.theme.palette.primaryLight);
   }, [goal, config, slug]);
 
   const fa = CHROME.fa;
+  const fallback = config ?? fallbackConfig(slug);
   if (status === 'not_found') {
-    return <Notice title={slug ? fa.notFound : fa.noGoals} action={{ href: hrefFor({ kind: 'studio' }), label: fa.openStudio }} />;
+    return <Notice config={fallback} title={slug ? fa.notFound : fa.noGoals} action={{ href: hrefFor({ kind: 'studio' }), label: fa.openStudio }} />;
   }
   if (status === 'not_configured') {
-    return <Notice title={fa.notConfigured} hint={fa.notConfiguredHint} />;
+    return <Notice config={fallback} title={fa.notConfigured} hint={fa.notConfiguredHint} />;
   }
   if (!goal || !config) {
-    return <Spinner message={status === 'error' ? fa.connectionLost : undefined} />;
+    return <Spinner config={fallback} message={status === 'error' ? fa.connectionLost : undefined} />;
   }
 
   const lang = langOverride && config.languages.includes(langOverride) ? langOverride : config.defaultLang;
@@ -76,7 +93,7 @@ function GoalRoute({ slug, edit }: { slug: string | null; edit: boolean }) {
 
   if (edit) {
     return (
-      <Suspense fallback={<Spinner />}>
+      <Suspense fallback={<Spinner config={config} />}>
         <ScoreEditor
           goal={goal}
           config={config}
@@ -119,7 +136,7 @@ export default function App() {
     return <GoalRoute key={`${route.slug}`} slug={route.slug} edit={route.edit} />;
   }
   return (
-    <Suspense fallback={<Spinner />}>
+    <Suspense fallback={<div className="studio-shell min-h-[100dvh]" />}>
       <Studio route={route} />
     </Suspense>
   );

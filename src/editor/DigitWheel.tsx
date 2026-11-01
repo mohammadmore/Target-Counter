@@ -73,12 +73,12 @@ export default function DigitWheel({
       style={{ perspective: '300px', touchAction: 'none' }}
     >
       {/* 3D Bevel & Inner Shadows */}
-      <div className="absolute inset-0 shadow-[inset_0_5px_12px_rgba(0,0,0,0.85),inset_0_-5px_12px_rgba(0,0,0,0.85)] pointer-events-none z-10 rounded-lg" />
-      <div className="absolute inset-0 border border-white/5 pointer-events-none z-10 rounded-lg" />
+      <div className="absolute inset-0 shadow-[inset_0_5px_12px_rgb(0_0_0/var(--shade)),inset_0_-5px_12px_rgb(0_0_0/var(--shade))] pointer-events-none z-10 rounded-lg" />
+      <div className="absolute inset-0 border border-text/5 pointer-events-none z-10 rounded-lg" />
 
       {/* Gradient Masks */}
-      <div className="absolute top-0 w-full h-[35%] bg-gradient-to-b from-black/95 via-black/40 to-transparent z-10 pointer-events-none" />
-      <div className="absolute bottom-0 w-full h-[35%] bg-gradient-to-t from-black/95 via-black/40 to-transparent z-10 pointer-events-none" />
+      <div className="absolute top-0 w-full h-[35%] bg-gradient-to-b from-bg/95 via-bg/40 to-transparent z-10 pointer-events-none" />
+      <div className="absolute bottom-0 w-full h-[35%] bg-gradient-to-t from-bg/95 via-bg/40 to-transparent z-10 pointer-events-none" />
 
       {/* 3D Wheel Numbers */}
       <div className="absolute inset-0 flex items-center justify-center font-mono font-bold" style={{ transformStyle: 'preserve-3d' }}>

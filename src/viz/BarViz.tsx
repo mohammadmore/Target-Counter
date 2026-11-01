@@ -20,7 +20,7 @@ export default function BarViz({ ratio, target, lang, label, config, compact }: 
         </div>
 
         {/* Track */}
-        <div className="relative h-7 rounded-full bg-track border border-primary/25 overflow-hidden shadow-[inset_0_2px_8px_rgba(0,0,0,0.5)]">
+        <div className="relative h-7 rounded-full bg-track border border-primary/25 overflow-hidden shadow-[inset_0_2px_8px_rgb(0_0_0/var(--shade))]">
           <div
             className="viz-anim absolute inset-y-0 start-0 rounded-full bg-gradient-to-l rtl:bg-gradient-to-r from-primary-light via-primary to-primary-dark shadow-[0_0_18px_color-mix(in_srgb,var(--color-primary)_45%,transparent)] overflow-hidden"
             style={{ width: `${shown * 100}%`, transition: `width ${transition}` }}

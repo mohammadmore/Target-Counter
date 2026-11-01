@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 import kiyanBg from '../assets/kiyanbg.webp';
 import { FONTS } from './presets';
+import { contrastRatio } from './quality';
 import type { GoalConfig } from './types';
 
 const BUILTIN_IMAGES: Record<string, string> = { 'builtin:kiyan': kiyanBg };
@@ -16,8 +17,12 @@ export function assetUrl(ref: string): string {
 const RADIUS = { sharp: '4px', soft: '12px', round: '24px' } as const;
 
 /** CSS variables consumed by the Tailwind theme tokens (bg-primary, text-text-muted …). */
+/** Light backgrounds need darker error text and softer shadows than dark ones. */
+export const isLightPalette = (bg: string) => contrastRatio(bg, '#000000') > contrastRatio(bg, '#ffffff');
+
 export function themeStyle(config: GoalConfig): CSSProperties {
   const p = config.theme.palette;
+  const light = isLightPalette(p.bg);
   const font = FONTS.find((f) => f.id === config.theme.font.id) ?? FONTS[0];
   return {
     '--color-bg': p.bg,
@@ -28,6 +33,8 @@ export function themeStyle(config: GoalConfig): CSSProperties {
     '--color-text': p.text,
     '--color-text-muted': p.textMuted,
     '--color-track': p.track,
+    '--color-danger': light ? '#c81e1e' : '#fb7185',
+    '--shade': light ? '0.14' : '0.6',
     '--font-goal': `${font.family}, 'Vazirmatn', Tahoma, sans-serif`,
     '--radius-goal': RADIUS[config.theme.radius],
   } as CSSProperties;

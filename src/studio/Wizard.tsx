@@ -263,7 +263,7 @@ export default function Wizard({ token, slug, onUnauthorized }: { token: string;
   if (loadError) {
     return (
       <div className="max-w-md mx-auto p-8 text-center space-y-4">
-        <p className="text-red-400">{loadError}</p>
+        <p className="text-rose-300">{loadError}</p>
         <button className={buttonClass.ghost} onClick={() => navigate({ kind: 'studio' })}>
           بازگشت به داشبورد
         </button>
@@ -273,7 +273,7 @@ export default function Wizard({ token, slug, onUnauthorized }: { token: string;
   if (!draft) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
-        <Loader2 className="animate-spin text-zinc-500" />
+        <Loader2 className="animate-spin text-violet-200/60" />
       </div>
     );
   }
@@ -318,8 +318,8 @@ export default function Wizard({ token, slug, onUnauthorized }: { token: string;
             <ArrowRight size={16} />
           </button>
           <div className="min-w-0">
-            <h1 className="text-lg font-bold truncate">{isNew ? 'ساخت صفحه‌ی هدف جدید' : `طراحی «${draft.config.name}»`}</h1>
-            <p className={`text-xs ${dirty ? 'text-amber-300' : 'text-zinc-500'}`}>{status}</p>
+            <h1 className="text-lg sm:text-xl font-extrabold truncate text-aurora">{isNew ? 'ساخت صفحه‌ی هدف جدید' : `طراحی «${draft.config.name}»`}</h1>
+            <p className={`text-xs ${dirty ? 'text-pink-300' : 'text-violet-100/50'}`}>{status}</p>
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -332,7 +332,7 @@ export default function Wizard({ token, slug, onUnauthorized }: { token: string;
       </header>
 
       {restoreCandidate && (
-        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-sky-500/40 bg-sky-500/10 p-3 text-sm text-sky-100">
+        <div className="mb-4 flex flex-wrap items-center gap-3 glass rounded-2xl !border-sky-300/35 p-3 text-sm text-sky-50">
           <History size={16} className="shrink-0" />
           <span className="flex-1 min-w-[200px]">
             تغییرات ذخیره‌نشده‌ای از {new Date(restoreCandidate.savedAt).toLocaleString('fa-IR', { dateStyle: 'short', timeStyle: 'short' })} در این مرورگر پیدا شد.
@@ -359,7 +359,7 @@ export default function Wizard({ token, slug, onUnauthorized }: { token: string;
       )}
 
       {draft.hasDraft && draft.published && !dirty && (
-        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-zinc-700 bg-zinc-900/60 p-3 text-xs text-zinc-300">
+        <div className="mb-4 flex flex-wrap items-center gap-3 glass rounded-2xl p-3 text-xs text-violet-50/80">
           <span className="flex-1 min-w-[200px]">در حال ویرایش پیش‌نویس هستید؛ بازدیدکنندگان هنوز نسخه‌ی قبلی را می‌بینند.</span>
           {draft.draftToken && <CopyLink url={draftPreviewUrl(draft.slug, draft.draftToken)} label="لینک پیش‌نمایش" />}
           <button className={`${buttonClass.danger} !py-1.5`} onClick={discardDraft} disabled={!!busy}>
@@ -370,7 +370,7 @@ export default function Wizard({ token, slug, onUnauthorized }: { token: string;
       )}
 
       {lastSaved === 'draft' && draft.draftToken && (
-        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm text-emerald-100">
+        <div className="mb-4 flex flex-wrap items-center gap-3 glass rounded-2xl !border-emerald-300/35 p-3 text-sm text-emerald-50">
           <Check size={16} />
           <span className="flex-1">پیش‌نویس ذخیره شد. این لینک را برای تأیید بفرستید؛ صفحه‌ی عمومی تغییری نکرده است.</span>
           <CopyLink url={draftPreviewUrl(draft.slug, draft.draftToken)} label="کپی لینک پیش‌نمایش" />
@@ -378,7 +378,7 @@ export default function Wizard({ token, slug, onUnauthorized }: { token: string;
       )}
 
       {error && (
-        <p className="mb-4 text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg p-3" role="alert">
+        <p className="mb-4 text-sm text-rose-100 bg-rose-500/15 border border-rose-300/30 rounded-2xl p-3 backdrop-blur-md" role="alert">
           {error}
         </p>
       )}
@@ -395,10 +395,10 @@ export default function Wizard({ token, slug, onUnauthorized }: { token: string;
                     disabled={blocked}
                     onClick={() => setStep(i)}
                     className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs whitespace-nowrap transition-colors disabled:opacity-40 ${
-                      i === step ? 'bg-amber-400 text-zinc-950 font-bold' : 'text-zinc-400 hover:bg-zinc-900'
+                      i === step ? 'btn-aurora font-bold' : 'text-violet-100/60 hover:bg-white/10 hover:text-white'
                     }`}
                   >
-                    <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[0.65rem] ${i === step ? 'bg-zinc-950/15' : 'bg-zinc-800'}`}>
+                    <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[0.65rem] ${i === step ? 'bg-white/25' : 'bg-white/10'}`}>
                       {formatNumber(i + 1, 'fa')}
                     </span>
                     {s.title}
@@ -437,7 +437,7 @@ export default function Wizard({ token, slug, onUnauthorized }: { token: string;
       </div>
 
       {showMobilePreview && (
-        <div className="fixed inset-0 z-50 bg-zinc-950/95 p-4 flex flex-col lg:hidden">
+        <div className="fixed inset-0 z-50 bg-[#0a0718]/80 backdrop-blur-xl p-4 flex flex-col lg:hidden">
           <button className={`${buttonClass.ghost} self-end mb-3`} onClick={() => setShowMobilePreview(false)}>
             <X size={16} />
             بستن پیش‌نمایش
@@ -495,10 +495,10 @@ function Review({ draft, justPublished, goTo, setTextLang }: { draft: Draft; jus
   return (
     <div className="space-y-4">
       {justPublished && (
-        <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-4 space-y-3">
+        <div className="glass rounded-2xl !border-emerald-300/35 p-4 space-y-3">
           <p className="font-bold text-emerald-300">صفحه منتشر شد 🎉</p>
           <div className="flex flex-wrap items-center gap-2">
-            <code className="text-xs bg-zinc-900 rounded px-2 py-1.5 text-zinc-200 break-all" dir="ltr">
+            <code className="text-xs bg-white/[0.07] border border-white/10 rounded-lg px-2 py-1.5 text-white/85 break-all" dir="ltr">
               {goalUrl(draft.slug)}
             </code>
             <CopyLink url={goalUrl(draft.slug)} label="کپی لینک" />
@@ -510,7 +510,7 @@ function Review({ draft, justPublished, goTo, setTextLang }: { draft: Draft; jus
       )}
 
       {(missing.length > 0 || contrast.length > 0) && (
-        <div className="rounded-xl border border-amber-400/40 bg-amber-400/10 p-4 space-y-2 text-sm text-amber-100">
+        <div className="glass rounded-2xl !border-amber-300/35 p-4 space-y-2 text-sm text-amber-50">
           <div className="flex items-center gap-2 font-bold text-amber-200">
             <AlertTriangle size={16} />
             قبل از انتشار بررسی کنید
@@ -536,15 +536,15 @@ function Review({ draft, justPublished, goTo, setTextLang }: { draft: Draft; jus
         </div>
       )}
 
-      <div className="rounded-xl border border-zinc-800 divide-y divide-zinc-800">
+      <div className="glass rounded-2xl divide-y divide-white/10">
         {rows.map(([k, v]) => (
           <div key={k} className="flex justify-between gap-4 px-4 py-2.5 text-sm">
-            <span className="text-zinc-400">{k}</span>
-            <span className="text-zinc-100 text-end">{v}</span>
+            <span className="text-violet-100/60">{k}</span>
+            <span className="text-white text-end">{v}</span>
           </div>
         ))}
       </div>
-      <p className="text-xs text-zinc-500 leading-relaxed">
+      <p className="text-xs text-violet-100/50 leading-relaxed">
         «ذخیره‌ی پیش‌نویس» صفحه‌ی عمومی را تغییر نمی‌دهد و یک لینک پیش‌نمایش برای تأیید می‌سازد. «انتشار» تغییرات را برای همه‌ی بازدیدکنندگان اعمال می‌کند.
       </p>
     </div>

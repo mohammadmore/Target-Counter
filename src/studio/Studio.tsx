@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Copy, ExternalLink, Home, Loader2, LogOut, Palette, PenLine, Plus, Star, Trash2, CopyPlus } from 'lucide-react';
+import { Sparkles, Copy, ExternalLink, Home, Loader2, LogOut, Palette, PenLine, Plus, Star, Trash2, CopyPlus } from 'lucide-react';
 import { api, clearToken, isDevStorage, loadToken, messageFor, storeToken, ApiError, type GoalSummary } from '../lib/api';
 import { formatNumber, formatPercent } from '../lib/format';
 import { goalUrl, hrefFor, navigate, type Route } from '../router';
@@ -33,7 +33,13 @@ export default function Studio({ route }: { route: Exclude<Route, { kind: 'goal'
   }, []);
 
   return (
-    <div dir="rtl" lang="fa" className="min-h-[100dvh] bg-zinc-950 text-zinc-100 font-vazirmatn">
+    <div dir="rtl" lang="fa" className="studio-shell min-h-[100dvh] font-vazirmatn">
+      <div className="studio-aurora" aria-hidden>
+        <span />
+        <span />
+        <span />
+        <span />
+      </div>
       {!token ? (
         <div className="min-h-[100dvh] flex items-center justify-center p-6">
           <Login onLogin={setToken} />
@@ -44,7 +50,7 @@ export default function Studio({ route }: { route: Exclude<Route, { kind: 'goal'
         <Dashboard token={token} onLogout={logout} onUnauthorized={requestReauth} />
       )}
       {token && reauth && (
-        <div className="fixed inset-0 z-[80] bg-zinc-950/85 backdrop-blur-sm flex items-center justify-center p-6" role="dialog" aria-modal="true">
+        <div className="fixed inset-0 z-[80] bg-[#0a0718]/60 backdrop-blur-md flex items-center justify-center p-6" role="dialog" aria-modal="true">
           <Login
             reauth
             onLogin={(t) => {
@@ -84,36 +90,39 @@ function Login({ onLogin, reauth = false, onCancel }: { onLogin: (token: string)
 
   return (
     <form
-      className="w-full max-w-sm rounded-2xl border border-zinc-800 bg-zinc-900 p-6 space-y-4 shadow-2xl"
+      className="glass-strong w-full max-w-sm rounded-3xl p-7 space-y-4"
       onSubmit={(e) => {
         e.preventDefault();
         submit();
       }}
     >
       <div>
-        <h1 className="text-lg font-bold">{reauth ? 'نشست شما منقضی شده است' : 'استودیو هدف‌گذاری'}</h1>
-        <p className="text-sm text-zinc-400 mt-1 leading-relaxed">
+        <div className="aurora-gradient w-11 h-11 rounded-2xl mb-4 shadow-[0_8px_24px_-6px_rgba(168,85,247,0.8)] flex items-center justify-center">
+          <Sparkles size={20} className="text-white" />
+        </div>
+        <h1 className="text-xl font-extrabold text-aurora">{reauth ? 'نشست شما منقضی شده است' : 'استودیو هدف‌گذاری'}</h1>
+        <p className="text-sm text-violet-100/65 mt-1.5 leading-relaxed">
           {reauth
             ? 'برای ادامه دوباره رمز مدیر را وارد کنید. کارهایی که انجام داده‌اید حفظ شده‌اند و ذخیره‌ی نیمه‌کاره خودکار ادامه پیدا می‌کند.'
             : 'برای ساخت و مدیریت صفحه‌های هدف، رمز مدیر پلتفرم را وارد کنید.'}
         </p>
       </div>
       <input type="password" autoFocus autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} className={inputClass} placeholder="رمز عبور" aria-label="رمز عبور" />
-      <label className="flex items-center gap-2 text-sm text-zinc-400 cursor-pointer">
-        <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} className="w-4 h-4 accent-amber-400" />
+      <label className="flex items-center gap-2 text-sm text-violet-100/70 cursor-pointer">
+        <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} className="w-4 h-4 accent-fuchsia-500" />
         مرا در این دستگاه به خاطر بسپار (۳۰ روز)
       </label>
-      {error && <p className="text-sm text-red-400" role="alert">{error}</p>}
+      {error && <p className="text-sm text-rose-300" role="alert">{error}</p>}
       <button type="submit" className={`${buttonClass.primary} w-full`} disabled={busy || !password}>
         {busy && <Loader2 size={16} className="animate-spin" />}
         ورود
       </button>
       {onCancel && (
-        <button type="button" onClick={onCancel} className="block w-full text-center text-xs text-zinc-500 hover:text-zinc-300">
+        <button type="button" onClick={onCancel} className="block w-full text-center text-xs text-violet-100/45 hover:text-white">
           خروج کامل
         </button>
       )}
-      {import.meta.env.DEV && <p className="text-[0.7rem] text-zinc-500">حالت توسعه: هر رمزی پذیرفته می‌شود.</p>}
+      {import.meta.env.DEV && <p className="text-[0.7rem] text-violet-100/45">حالت توسعه: هر رمزی پذیرفته می‌شود.</p>}
     </form>
   );
 }
@@ -187,8 +196,8 @@ function Dashboard({ token, onLogout, onUnauthorized }: { token: string; onLogou
     <div className="max-w-5xl mx-auto px-4 py-8 space-y-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold">صفحه‌های هدف</h1>
-          <p className="text-sm text-zinc-400 mt-1">هر صفحه یک هدف تیمی یا سازمانی با ظاهر و سبک نمایش مخصوص خودش است.</p>
+          <h1 className="text-2xl font-extrabold text-aurora">صفحه‌های هدف</h1>
+          <p className="text-sm text-violet-100/60 mt-1">هر صفحه یک هدف تیمی یا سازمانی با ظاهر و سبک نمایش مخصوص خودش است.</p>
         </div>
         <div className="flex gap-2">
           <button className={buttonClass.primary} onClick={() => navigate({ kind: 'wizard', slug: null })}>
@@ -202,19 +211,19 @@ function Dashboard({ token, onLogout, onUnauthorized }: { token: string; onLogou
       </header>
 
       {isDevStorage() && (
-        <p className="text-xs rounded-lg border border-amber-400/30 bg-amber-400/10 text-amber-200 px-3 py-2">
+        <p className="glass-soft text-xs rounded-xl !border-amber-300/30 text-amber-100 px-3 py-2">
           حالت توسعه: سرور PHP در دسترس نیست و داده‌ها فقط در همین مرورگر ذخیره می‌شوند.
         </p>
       )}
-      {error && <p className="text-sm text-red-400">{error}</p>}
+      {error && <p className="text-sm text-rose-300">{error}</p>}
 
       {goals === null ? (
         <div className="flex justify-center py-16">
-          <Loader2 className="animate-spin text-zinc-500" />
+          <Loader2 className="animate-spin text-violet-200/60" />
         </div>
       ) : goals.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-zinc-700 p-12 text-center space-y-3">
-          <p className="text-zinc-300">هنوز هیچ صفحه‌ای نساخته‌اید.</p>
+        <div className="glass rounded-3xl !border-dashed p-12 text-center space-y-3">
+          <p className="text-violet-50/80">هنوز هیچ صفحه‌ای نساخته‌اید.</p>
           <button className={buttonClass.primary} onClick={() => navigate({ kind: 'wizard', slug: null })}>
             <Plus size={16} />
             ساخت اولین صفحه
@@ -228,36 +237,36 @@ function Dashboard({ token, onLogout, onUnauthorized }: { token: string; onLogou
             const daysSinceScore = (Date.now() / 1000 - g.scoreUpdatedAt) / 86_400;
             const stale = g.published && daysSinceScore > STALE_AFTER_DAYS;
             return (
-              <li key={g.slug} className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-4 space-y-3">
+              <li key={g.slug} className="glass rounded-2xl p-4 space-y-3 transition-transform hover:-translate-y-0.5">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <h2 className="font-bold truncate">{name}</h2>
                       {g.slug === defaultGoal && (
-                        <span className="shrink-0 inline-flex items-center gap-1 text-[0.65rem] px-1.5 py-0.5 rounded bg-amber-400/15 text-amber-300">
+                        <span className="shrink-0 inline-flex items-center gap-1 text-[0.65rem] px-1.5 py-0.5 rounded-md bg-violet-500/25 text-violet-100 border border-violet-300/20">
                           <Home size={11} /> صفحه‌ی اصلی
                         </span>
                       )}
-                      {!g.published && <span className="shrink-0 text-[0.65rem] px-1.5 py-0.5 rounded bg-zinc-700 text-zinc-200">منتشر نشده</span>}
-                      {g.published && g.hasDraft && <span className="shrink-0 text-[0.65rem] px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-300">پیش‌نویس دارد</span>}
+                      {!g.published && <span className="shrink-0 text-[0.65rem] px-1.5 py-0.5 rounded-md bg-white/10 text-white/80 border border-white/15">منتشر نشده</span>}
+                      {g.published && g.hasDraft && <span className="shrink-0 text-[0.65rem] px-1.5 py-0.5 rounded-md bg-sky-400/15 text-sky-200 border border-sky-300/20">پیش‌نویس دارد</span>}
                     </div>
-                    <a href={hrefFor({ kind: 'goal', slug: g.slug, edit: false })} target="_blank" rel="noreferrer" className="text-xs text-zinc-500 font-mono hover:text-zinc-300" dir="ltr">
+                    <a href={hrefFor({ kind: 'goal', slug: g.slug, edit: false })} target="_blank" rel="noreferrer" className="text-xs text-violet-100/45 font-mono hover:text-white" dir="ltr">
                       ?g={g.slug}
                     </a>
                   </div>
-                  <span className="text-sm font-bold text-amber-300 shrink-0" dir="ltr">
+                  <span className="text-base font-extrabold text-aurora shrink-0" dir="ltr">
                     {formatPercent(ratio * 100, 'fa')}%
                   </span>
                 </div>
 
-                <div className="h-1.5 rounded-full bg-zinc-800 overflow-hidden">
-                  <div className="h-full bg-amber-400 rounded-full" style={{ width: `${ratio * 100}%` }} />
+                <div className="h-2 rounded-full bg-white/10 overflow-hidden">
+                  <div className="h-full aurora-gradient rounded-full shadow-[0_0_12px_rgba(168,85,247,0.7)]" style={{ width: `${ratio * 100}%` }} />
                 </div>
                 <div className="flex flex-wrap justify-between gap-2 text-xs">
-                  <span className="text-zinc-400" dir="ltr">
+                  <span className="text-violet-100/65" dir="ltr">
                     {formatNumber(g.score, 'fa')} / {formatNumber(g.target, 'fa')}
                   </span>
-                  <span className={stale ? 'text-amber-300' : 'text-zinc-500'} title={stale ? 'مدتی است امتیازی ثبت نشده؛ عدد صفحه ممکن است قدیمی باشد' : undefined}>
+                  <span className={stale ? 'text-amber-300' : 'text-violet-100/45'} title={stale ? 'مدتی است امتیازی ثبت نشده؛ عدد صفحه ممکن است قدیمی باشد' : undefined}>
                     {stale && '⚠ '}آخرین ثبت امتیاز: {timeAgo(g.scoreUpdatedAt, 'fa')}
                   </span>
                 </div>

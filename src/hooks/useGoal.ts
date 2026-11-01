@@ -19,10 +19,10 @@ export function readGoalCache(slug: string | null): GoalPayload | null {
   }
 }
 
-/** Also stores the background colour so index.html can paint it before any JS runs. */
-export function writeGoalCache(slug: string | null, payload: GoalPayload, bg: string) {
+/** Also stores the colours so index.html can paint the page's look before any JS runs. */
+export function writeGoalCache(slug: string | null, payload: GoalPayload, bg: string, fg: string) {
   try {
-    localStorage.setItem(cacheKey(slug), JSON.stringify({ payload, bg }));
+    localStorage.setItem(cacheKey(slug), JSON.stringify({ payload, bg, fg }));
   } catch { /* storage full or disabled */ }
 }
 

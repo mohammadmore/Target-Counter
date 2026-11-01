@@ -14,7 +14,10 @@
       /* Painted before any JS: no white flash, even on slow mobile networks. */
       html, body { margin: 0; background: #0b0b0c; min-height: 100%; }
       .boot { min-height: 100vh; min-height: 100dvh; display: flex; align-items: center; justify-content: center; }
-      .boot i { width: 40px; height: 40px; border-radius: 50%; border: 3px solid rgba(255,255,255,.14); border-top-color: rgba(255,255,255,.7); animation: boot-spin .9s linear infinite; }
+      .boot i { width: 40px; height: 40px; border-radius: 50%; border: 3px solid var(--boot-track, rgba(255,255,255,.14)); border-top-color: var(--boot-fg, rgba(255,255,255,.7)); animation: boot-spin .9s linear infinite; }
+      /* The studio has its own aurora look */
+      html.studio-boot { background: radial-gradient(60% 50% at 20% 20%, rgba(124,58,237,.35), transparent 70%), radial-gradient(50% 45% at 85% 30%, rgba(236,72,153,.28), transparent 70%), radial-gradient(60% 50% at 50% 95%, rgba(59,130,246,.3), transparent 70%), #0a0718; }
+      html.studio-boot .boot i { border-color: rgba(255,255,255,.15); border-top-color: #c084fc; }
       @keyframes boot-spin { to { transform: rotate(360deg); } }
       @media (prefers-reduced-motion: reduce) { .boot i { animation-duration: 3s; } }
     </style>
@@ -24,13 +27,18 @@
       (function () {
         try {
           var q = new URLSearchParams(location.search);
-          if (q.has('studio') || q.has('preview')) return;
+          if (q.has('studio')) { document.documentElement.className = 'studio-boot'; return; }
+          if (q.has('preview')) return;
           var slug = q.get('g') || '';
           var draft = q.get('draft') || '';
           var cached = JSON.parse(localStorage.getItem('goal_cache_' + (slug || '_default')) || 'null');
           if (cached && /^#[0-9a-f]{3,8}$/i.test(cached.bg || '') && !draft) {
             document.documentElement.style.background = cached.bg;
             document.querySelector('meta[name=theme-color]').setAttribute('content', cached.bg);
+            if (/^#[0-9a-f]{3,8}$/i.test(cached.fg || '')) {
+              document.documentElement.style.setProperty('--boot-fg', cached.fg);
+              document.documentElement.style.setProperty('--boot-track', cached.fg + '33');
+            }
           }
           var p = new URLSearchParams();
           if (slug) p.set('goal', slug);

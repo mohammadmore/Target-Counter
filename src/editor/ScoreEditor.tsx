@@ -201,7 +201,7 @@ export default function ScoreEditor({ goal, config, lang, mutate, refresh, onBac
           {t.remember}
         </label>
         {loginError && (
-          <p className="text-red-400 text-[0.85rem]" role="alert">
+          <p className="text-danger text-[0.85rem]" role="alert">
             {loginError}
           </p>
         )}
@@ -299,7 +299,7 @@ export default function ScoreEditor({ goal, config, lang, mutate, refresh, onBac
                   aria-label={s === 1 ? t.add : t.subtract}
                   title={s === 1 ? t.add : t.subtract}
                   onClick={() => setSign(s)}
-                  className={`w-11 flex items-center justify-center ${sign === s ? (s === 1 ? 'bg-primary text-bg' : 'bg-red-500/80 text-white') : 'text-text-muted'}`}
+                  className={`w-11 flex items-center justify-center ${sign === s ? (s === 1 ? 'bg-primary text-bg' : 'bg-danger text-bg') : 'text-text-muted'}`}
                 >
                   {s === 1 ? <Plus size={18} /> : <Minus size={18} />}
                 </button>
@@ -312,7 +312,7 @@ export default function ScoreEditor({ goal, config, lang, mutate, refresh, onBac
             {addPreview !== null && (
               <>
                 <span className="text-text-muted">{t.newTotal}</span>
-                <span className={addError ? 'text-red-400 font-bold' : 'text-primary-light font-bold'} style={{ direction: 'ltr' }}>
+                <span className={addError ? 'text-danger font-bold' : 'text-primary-light font-bold'} style={{ direction: 'ltr' }}>
                   {formatNumber(addPreview, lang)} · {addError ? '' : pct(addPreview)}
                 </span>
               </>
@@ -373,7 +373,7 @@ export default function ScoreEditor({ goal, config, lang, mutate, refresh, onBac
             {newScore !== null && newScore !== score && (
               <>
                 <span className="text-text-muted">{t.change}</span>
-                <span className={setError ? 'text-red-400 font-bold' : 'text-primary-light font-bold'} style={{ direction: 'ltr' }}>
+                <span className={setError ? 'text-danger font-bold' : 'text-primary-light font-bold'} style={{ direction: 'ltr' }}>
                   {newScore - score > 0 ? '+' : '−'}
                   {formatNumber(Math.abs(newScore - score), lang)}
                   {!setError && ` · ${pct(newScore)}`}
@@ -389,7 +389,7 @@ export default function ScoreEditor({ goal, config, lang, mutate, refresh, onBac
       )}
 
       <div role="status" aria-live="polite" className="min-h-[1.2em] text-center">
-        {message && <span className={`text-[0.85rem] ${message.kind === 'error' ? 'text-red-400' : 'text-primary-light'}`}>{message.text}</span>}
+        {message && <span className={`text-[0.85rem] ${message.kind === 'error' ? 'text-danger' : 'text-primary-light'}`}>{message.text}</span>}
       </div>
 
       {/* History */}
@@ -411,7 +411,7 @@ export default function ScoreEditor({ goal, config, lang, mutate, refresh, onBac
               const noteText = e.kind === 'undo' ? `${t.undoOf} ${e.note ?? ''}` : e.note === 'studio' ? t.studio : e.note;
               return (
                 <li key={e.id} className={`flex items-center gap-2 text-[0.8rem] rounded-[8px] px-2 py-1.5 bg-bg/50 ${e.reverted ? 'opacity-50' : ''}`}>
-                  <span className={`font-bold shrink-0 ${delta >= 0 ? 'text-primary-light' : 'text-red-300'} ${e.reverted ? 'line-through' : ''}`} style={{ direction: 'ltr' }}>
+                  <span className={`font-bold shrink-0 ${delta >= 0 ? 'text-primary-light' : 'text-danger'} ${e.reverted ? 'line-through' : ''}`} style={{ direction: 'ltr' }}>
                     {delta >= 0 ? '+' : '−'}
                     {formatNumber(Math.abs(delta), lang)}
                   </span>

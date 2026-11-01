@@ -87,7 +87,7 @@ export function BasicsStep({ draft, setDraft, patch }: StepProps) {
       <Section title="آدرس صفحه" description="لینک اشتراک‌گذاری صفحه با این شناسه ساخته می‌شود.">
         <Field label="شناسه (slug)" error={errors.slug}>
           <div className="flex items-center gap-2" dir="ltr">
-            <span className="text-xs text-zinc-500 font-mono shrink-0">?g=</span>
+            <span className="text-xs text-violet-100/45 font-mono shrink-0">?g=</span>
             <input
               className={`${inputClass} font-mono`}
               value={draft.slug}
@@ -96,7 +96,7 @@ export function BasicsStep({ draft, setDraft, patch }: StepProps) {
           </div>
         </Field>
         {renaming && (
-          <p className="flex gap-2 text-xs text-sky-200 bg-sky-500/10 border border-sky-500/30 rounded-lg p-2.5 leading-relaxed">
+          <p className="flex gap-2 text-xs text-sky-100 bg-sky-400/10 border border-sky-300/30 rounded-xl p-2.5 leading-relaxed">
             <Info size={14} className="shrink-0 mt-0.5" />
             لینک قبلی (<span dir="ltr" className="font-mono">?g={draft.originalSlug}</span>) بعد از ذخیره هم کار می‌کند و خودکار به آدرس جدید می‌رود.
           </p>
@@ -112,7 +112,7 @@ export function BasicsStep({ draft, setDraft, patch }: StepProps) {
                 key={lang}
                 type="button"
                 onClick={() => toggleLang(lang)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm ${on ? 'border-amber-400 bg-amber-400/10 text-amber-200' : 'border-zinc-700 text-zinc-400 hover:bg-zinc-800'}`}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm ${on ? 'selected-aurora bg-white/10 text-white' : 'border-white/15 text-violet-100/60 hover:bg-white/10'}`}
               >
                 {on && <Check size={14} />}
                 {LANG_NAMES[lang]}
@@ -141,7 +141,7 @@ export function StyleStep({ draft, patch }: StepProps) {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-zinc-400 leading-relaxed">
+      <p className="text-sm text-violet-100/60 leading-relaxed">
         فقط یک سبک انتخاب کنید تا صفحه روی یک پیام تمرکز داشته باشد. پیش‌نمایش‌ها با رنگ و فونت فعلی شما و پیشرفت ۶۲٪ نمایش داده می‌شوند.
       </p>
       <div className="grid grid-cols-2 xl:grid-cols-3 gap-3" role="radiogroup" aria-label="سبک نمایش پیشرفت">
@@ -155,7 +155,7 @@ export function StyleStep({ draft, patch }: StepProps) {
               role="radio"
               aria-checked={active}
               onClick={() => patch((c) => void (c.visualization.type = v.id as VizType))}
-              className={`text-start rounded-xl border overflow-hidden transition-all ${active ? 'border-amber-400 ring-2 ring-amber-400/40' : 'border-zinc-800 hover:border-zinc-600'}`}
+              className={`text-start rounded-2xl border overflow-hidden transition-all ${active ? 'selected-aurora' : 'border-white/10 hover:border-white/30 hover:-translate-y-0.5'}`}
             >
               <div style={themeStyle(config)} dir={dirOf(lang)} className="relative h-[150px] bg-bg text-text font-goal overflow-hidden pointer-events-none">
                 <div className="absolute inset-0 bg-glow opacity-80" />
@@ -165,12 +165,12 @@ export function StyleStep({ draft, patch }: StepProps) {
                   </Suspense>
                 </div>
               </div>
-              <div className="p-3 bg-zinc-900/60">
+              <div className="p-3 glass-soft !border-0 !rounded-none">
                 <div className="flex items-center gap-1.5 text-sm font-bold">
-                  {active && <Check size={14} className="text-amber-400" />}
+                  {active && <Check size={14} className="text-fuchsia-300" />}
                   {v.name}
                 </div>
-                <p className="text-[0.7rem] text-zinc-400 mt-1 leading-relaxed">{v.description}</p>
+                <p className="text-[0.7rem] text-violet-100/60 mt-1 leading-relaxed">{v.description}</p>
               </div>
             </button>
           );
@@ -187,7 +187,7 @@ export function StyleStep({ draft, patch }: StepProps) {
                 max={10}
                 value={config.visualization.milestones}
                 onChange={(e) => patch((c) => void (c.visualization.milestones = Number(e.target.value)))}
-                className="w-full accent-amber-400"
+                className="w-full accent-fuchsia-500"
               />
             </Field>
           )}
@@ -240,7 +240,7 @@ export function AppearanceStep({ draft, patch, token }: StepProps) {
                     c.theme.palette = { ...p.palette };
                   })
                 }
-                className={`rounded-lg border p-2 text-start ${active ? 'border-amber-400 ring-1 ring-amber-400/50' : 'border-zinc-800 hover:border-zinc-600'}`}
+                className={`glass-soft rounded-xl p-2 text-start transition-all ${active ? 'selected-aurora' : 'hover:border-white/30'}`}
               >
                 <div className="flex h-6 rounded overflow-hidden" style={{ background: p.palette.bg }}>
                   {[p.palette.primaryDark, p.palette.primary, p.palette.primaryLight].map((c) => (
@@ -248,7 +248,7 @@ export function AppearanceStep({ draft, patch, token }: StepProps) {
                   ))}
                   <span className="flex-1" style={{ background: p.palette.bg }} />
                 </div>
-                <div className="text-xs mt-1.5 text-zinc-300">{p.name}</div>
+                <div className="text-xs mt-1.5 text-white/80">{p.name}</div>
               </button>
             );
           })}
@@ -281,12 +281,12 @@ export function AppearanceStep({ draft, patch, token }: StepProps) {
                 key={f.id}
                 type="button"
                 onClick={() => patch((c) => void (c.theme.font.id = f.id))}
-                className={`rounded-lg border px-3 py-2 text-start ${active ? 'border-amber-400 bg-amber-400/10' : 'border-zinc-800 hover:border-zinc-600'}`}
+                className={`glass-soft rounded-xl px-3 py-2 text-start transition-all ${active ? 'selected-aurora !bg-white/10' : 'hover:border-white/30'}`}
               >
                 <div className="text-lg leading-snug" style={{ fontFamily: f.id === 'custom' ? undefined : `${f.family}, Tahoma` }}>
                   {f.id === 'custom' ? '…' : 'هدف ۱۲۳'}
                 </div>
-                <div className="text-[0.7rem] text-zinc-400">{f.name}</div>
+                <div className="text-[0.7rem] text-violet-100/60">{f.name}</div>
               </button>
             );
           })}
@@ -338,7 +338,7 @@ export function AppearanceStep({ draft, patch, token }: StepProps) {
                   key={b.id}
                   type="button"
                   onClick={() => patch((c) => void (c.background.image = b.id))}
-                  className={`rounded-lg overflow-hidden border-2 ${config.background.image === b.id ? 'border-amber-400' : 'border-transparent'}`}
+                  className={`rounded-lg overflow-hidden border-2 ${config.background.image === b.id ? 'selected-aurora' : 'border-transparent'}`}
                   title={b.name}
                 >
                   <img src={b.url} alt={b.name} className="h-14 w-24 object-cover" />
@@ -360,7 +360,7 @@ export function AppearanceStep({ draft, patch, token }: StepProps) {
                 max={100}
                 value={Math.round(config.background.overlay * 100)}
                 onChange={(e) => patch((c) => void (c.background.overlay = Number(e.target.value) / 100))}
-                className="w-full accent-amber-400"
+                className="w-full accent-fuchsia-500"
               />
             </Field>
           </div>
@@ -398,16 +398,16 @@ export function TextsStep({ draft, patch, lang, setLang }: StepProps & { lang: L
         />
       )}
       {missing.length > 0 && (
-        <p className="flex gap-2 text-xs text-amber-200 bg-amber-400/10 border border-amber-400/30 rounded-lg p-2.5 leading-relaxed">
+        <p className="flex gap-2 text-xs text-amber-100 bg-amber-400/10 border border-amber-300/30 rounded-xl p-2.5 leading-relaxed">
           <AlertTriangle size={14} className="shrink-0 mt-0.5" />
           {missing.length.toLocaleString('fa-IR')} متنِ این زبان هنوز متن پیش‌فرض است، در حالی که در زبان دیگر نوشته شده. اگر منتشر شود، بازدیدکنندگان این زبان متن عمومی می‌بینند.
         </p>
       )}
-      <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-3 text-xs text-zinc-400 leading-relaxed">
+      <div className="glass-soft rounded-xl p-3 text-xs text-violet-100/65 leading-relaxed">
         در متن‌ها می‌توانید از این جای‌گذارها استفاده کنید تا با اعداد زنده جایگزین شوند:
         <div className="flex flex-wrap gap-1.5 mt-2" dir="ltr">
           {['{target}', '{score}', '{remaining}', '{percent}', '{unit}'].map((p) => (
-            <code key={p} className="px-1.5 py-0.5 rounded bg-zinc-800 text-amber-200">
+            <code key={p} className="px-1.5 py-0.5 rounded-md bg-white/10 text-pink-200">
               {p}
             </code>
           ))}
@@ -428,7 +428,7 @@ export function TextsStep({ draft, patch, lang, setLang }: StepProps & { lang: L
         <button
           type="button"
           onClick={() => patch((c) => void (c.texts[activeLang] = { ...DEFAULT_TEXTS[activeLang] }))}
-          className="inline-flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-200"
+          className="inline-flex items-center gap-1.5 text-xs text-violet-100/60 hover:text-white"
         >
           <RotateCcw size={13} />
           بازگردانی متن‌های پیش‌فرض این زبان
@@ -467,7 +467,7 @@ export function FeaturesStep({ draft, setDraft, patch }: StepProps) {
         title="رمز ویرایشگر امتیاز"
         description="با این رمز، مسئول تیم فقط می‌تواند امتیاز همین صفحه را به‌روز کند و به استودیو دسترسی ندارد. بدون رمز ویرایشگر، فقط مدیر پلتفرم امتیاز ثبت می‌کند."
       >
-        {draft.hasEditorPassword && !draft.removeEditorPassword && <p className="text-xs text-emerald-400">برای این صفحه رمز ویرایشگر تعریف شده است.</p>}
+        {draft.hasEditorPassword && !draft.removeEditorPassword && <p className="text-xs text-emerald-300">برای این صفحه رمز ویرایشگر تعریف شده است.</p>}
         {draft.originalSlug && <EditorLink slug={draft.originalSlug} />}
         <Field label={draft.hasEditorPassword ? 'رمز جدید (خالی = بدون تغییر)' : 'رمز ویرایشگر (اختیاری)'} hint="حداقل ۶ کاراکتر">
           <input
@@ -504,7 +504,7 @@ function ContrastWarnings({ config, patch }: { config: GoalConfig; patch: StepPr
       c.theme.paletteId = 'custom';
     });
   return (
-    <div className="rounded-xl border border-amber-400/40 bg-amber-400/10 p-4 space-y-2" role="alert">
+    <div className="glass rounded-2xl !border-amber-300/40 p-4 space-y-2" role="alert">
       <div className="flex items-center gap-2 text-sm font-bold text-amber-200">
         <AlertTriangle size={16} />
         خوانایی رنگ‌ها کافی نیست
@@ -529,9 +529,9 @@ function EditorLink({ slug }: { slug: string }) {
   const url = `${goalUrl(slug)}&edit`;
   return (
     <div className="space-y-1.5">
-      <span className="text-xs font-medium text-zinc-300">لینک ثبت امتیاز برای مسئول تیم</span>
+      <span className="text-xs font-medium text-violet-50/85">لینک ثبت امتیاز برای مسئول تیم</span>
       <div className="flex items-center gap-2">
-        <code className="flex-1 min-w-0 truncate text-xs bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-2 text-zinc-300" dir="ltr">
+        <code className="flex-1 min-w-0 truncate text-xs bg-white/[0.06] border border-white/10 rounded-xl px-2 py-2 text-white/80" dir="ltr">
           {url}
         </code>
         <button
