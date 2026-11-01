@@ -4,46 +4,69 @@ import GoldGaugeChart from './GoldGaugeChart';
 import confetti from 'canvas-confetti';
 import { AnimatePresence, motion } from 'motion/react';
 import { Gauge, Disc, LayoutGrid } from 'lucide-react';
+import { formatNumber, type Lang } from '../lib/format';
+import { t } from '../i18n';
 
-export default function MainView({ score, target, lang }: { score: number; target: number, lang: 'fa' | 'ar' }) {
-  const safeTarget = target > 0 ? target : 60000000;
+type ViewMode = 'gauge' | 'ring' | 'all';
+
+const CONFETTI_DELAY_MS = 4000; // let the ring/gauge animation finish first
+const CONFETTI_DURATION_MS = 15_000;
+
+export default function MainView({ score, target, lang }: { score: number; target: number; lang: Lang }) {
+  const copy = t(lang);
+  const safeTarget = target > 0 ? target : 1;
   const remaining = Math.max(safeTarget - score, 0);
+  const goalReached = score >= safeTarget;
   const [showCelebration, setShowCelebration] = useState(false);
-  const [viewMode, setViewMode] = useState<'gauge' | 'ring' | 'all'>('gauge');
+  const [viewMode, setViewMode] = useState<ViewMode>('gauge');
 
   useEffect(() => {
-    if (score >= safeTarget && safeTarget > 0) {
-      const timer = setTimeout(() => {
-        setShowCelebration(true);
-        // Fire confetti
-        const duration = 15 * 1000;
-        const animationEnd = Date.now() + duration;
-        const defaults = { 
-          startVelocity: 30, 
-          spread: 360, 
-          ticks: 60, 
-          zIndex: 100,
-          colors: ['#FFFFFF', '#E2E8F0', '#C0C0C0', '#D4AF37', '#FBBF24']
-        };
-
-        const randomInRange = (min: number, max: number) => Math.random() * (max - min) + min;
-
-        const interval: any = setInterval(function() {
-          const timeLeft = animationEnd - Date.now();
-          if (timeLeft <= 0) {
-            return clearInterval(interval);
-          }
-          const particleCount = 50 * (timeLeft / duration);
-          confetti(Object.assign({}, defaults, { particleCount, origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 } }));
-          confetti(Object.assign({}, defaults, { particleCount, origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 } }));
-        }, 250);
-      }, 4000); // Wait 2s for ring animation + 2s extra
-
-      return () => clearTimeout(timer);
-    } else {
+    if (!goalReached) {
       setShowCelebration(false);
+      return;
     }
-  }, [score, safeTarget]);
+
+    let interval: ReturnType<typeof setInterval> | undefined;
+    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+    const timer = setTimeout(() => {
+      setShowCelebration(true);
+      if (reduceMotion) return;
+
+      const animationEnd = Date.now() + CONFETTI_DURATION_MS;
+      const defaults = {
+        startVelocity: 30,
+        spread: 360,
+        ticks: 60,
+        zIndex: 100,
+        colors: ['#FFFFFF', '#E2E8F0', '#C0C0C0', '#D4AF37', '#FBBF24'],
+      };
+      const randomInRange = (min: number, max: number) => Math.random() * (max - min) + min;
+
+      interval = setInterval(() => {
+        const timeLeft = animationEnd - Date.now();
+        if (timeLeft <= 0) {
+          clearInterval(interval);
+          return;
+        }
+        const particleCount = 50 * (timeLeft / CONFETTI_DURATION_MS);
+        confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 } });
+        confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 } });
+      }, 250);
+    }, CONFETTI_DELAY_MS);
+
+    return () => {
+      clearTimeout(timer);
+      clearInterval(interval);
+      confetti.reset();
+    };
+  }, [goalReached]);
+
+  const modes: { id: ViewMode; icon: typeof Gauge; label: string }[] = [
+    { id: 'gauge', icon: Gauge, label: copy.viewGauge(safeTarget) },
+    { id: 'ring', icon: Disc, label: copy.viewRing },
+    { id: 'all', icon: LayoutGrid, label: copy.viewAll },
+  ];
 
   return (
     <div className="relative z-40 min-h-[100dvh] flex flex-col items-center justify-center px-[4vw] sm:px-[6vw] py-[4vh] pt-[calc(5vh+70px)] pb-24 text-center">
@@ -56,44 +79,22 @@ export default function MainView({ score, target, lang }: { score: number; targe
           transition={{ duration: 0.4 }}
           className="flex items-center justify-center gap-1 p-1 bg-black/65 border border-gold-1/30 rounded-full mb-6 backdrop-blur-md shadow-[0_0_20px_rgba(212,175,55,0.08)] z-30"
         >
-          <button
-            type="button"
-            onClick={() => setViewMode('gauge')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[0.78rem] sm:text-[0.82rem] font-bold transition-all cursor-pointer ${
-              viewMode === 'gauge'
-                ? 'bg-gradient-to-r from-gold-2 via-gold-1 to-gold-3 text-black shadow-[0_0_12px_rgba(212,175,55,0.45)]'
-                : 'text-pearl-dim/75 hover:text-gold-2 hover:bg-white/5'
-            }`}
-          >
-            <Gauge size={14} />
-            <span>{lang === 'fa' ? 'گیج تارگت ۶۰M' : 'مقياس 60M'}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setViewMode('ring')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[0.78rem] sm:text-[0.82rem] font-bold transition-all cursor-pointer ${
-              viewMode === 'ring'
-                ? 'bg-gradient-to-r from-gold-2 via-gold-1 to-gold-3 text-black shadow-[0_0_12px_rgba(212,175,55,0.45)]'
-                : 'text-pearl-dim/75 hover:text-gold-2 hover:bg-white/5'
-            }`}
-          >
-            <Disc size={14} />
-            <span>{lang === 'fa' ? 'حلقه سفیر' : 'حلقة السفير'}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setViewMode('all')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[0.78rem] sm:text-[0.82rem] font-bold transition-all cursor-pointer ${
-              viewMode === 'all'
-                ? 'bg-gradient-to-r from-gold-2 via-gold-1 to-gold-3 text-black shadow-[0_0_12px_rgba(212,175,55,0.45)]'
-                : 'text-pearl-dim/75 hover:text-gold-2 hover:bg-white/5'
-            }`}
-          >
-            <LayoutGrid size={14} />
-            <span>{lang === 'fa' ? 'نمای کامل' : 'عرض شامل'}</span>
-          </button>
+          {modes.map(({ id, icon: Icon, label }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setViewMode(id)}
+              aria-pressed={viewMode === id}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[0.78rem] sm:text-[0.82rem] font-bold transition-all cursor-pointer ${
+                viewMode === id
+                  ? 'bg-gradient-to-r from-gold-2 via-gold-1 to-gold-3 text-black shadow-[0_0_12px_rgba(212,175,55,0.45)]'
+                  : 'text-pearl-dim/75 hover:text-gold-2 hover:bg-white/5'
+              }`}
+            >
+              <Icon size={14} />
+              <span>{label}</span>
+            </button>
+          ))}
         </motion.div>
       )}
 
@@ -112,12 +113,12 @@ export default function MainView({ score, target, lang }: { score: number; targe
               className="text-[clamp(1.4rem,4vw,2.2rem)] leading-[1.8] font-medium text-pearl px-4 drop-shadow-md max-w-[700px] text-center"
             >
               <span className="font-extrabold text-transparent bg-clip-text bg-gradient-to-b from-gold-2 to-gold-1 drop-shadow-[0_0_10px_rgba(212,175,55,0.4)]" style={{ WebkitBackgroundClip: 'text' }}>
-                {lang === 'fa' ? 'سفیر مروارید کیان تیم' : 'سفير لؤلؤة فريق كيان'}
+                {copy.celebrationTitle}
               </span>
               <br/>
-              {lang === 'fa' ? 'با همت و تلاش اعضای هدفمند' : 'بفضل جهود ومساعي الأعضاء الهادفين'}
+              {copy.celebrationLine1}
               <br/>
-              {lang === 'fa' ? 'این خانواده تیک شد' : 'في هذه العائلة تم تحقيقه'}
+              {copy.celebrationLine2}
             </motion.div>
           </AnimatePresence>
         </div>
@@ -174,7 +175,7 @@ export default function MainView({ score, target, lang }: { score: number; targe
       
       {/* Target Status & Vision Counter */}
       <div className="mt-[clamp(1.4rem,4vh,2.5rem)] w-full max-w-[480px] flex flex-col items-center gap-1 text-pearl">
-        {remaining <= 0 ? (
+        {goalReached ? (
           <div className={`transition-opacity duration-1000 ${showCelebration ? 'opacity-100 delay-700' : 'opacity-0'}`}>
             <AnimatePresence mode="wait">
               <motion.div 
@@ -185,7 +186,7 @@ export default function MainView({ score, target, lang }: { score: number; targe
                 transition={{ duration: 0.3 }}
                 className="text-[clamp(1.2rem,3.5vw,1.6rem)] font-bold text-transparent bg-clip-text bg-gradient-to-b from-pearl to-pearl-dim drop-shadow-sm mt-4"
               >
-                {lang === 'fa' ? 'پیش به سوی تکثیر سفیر مروارید' : 'نحو مضاعفة سفراء اللؤلؤ'}
+                {copy.afterGoal}
               </motion.div>
             </AnimatePresence>
           </div>
@@ -201,15 +202,15 @@ export default function MainView({ score, target, lang }: { score: number; targe
             >
               <div className="text-[clamp(1.7rem,4.5vw,2.3rem)] font-bold leading-tight">
                 <span className="font-extrabold text-transparent bg-clip-text bg-gradient-to-b from-gold-2 to-gold-1" style={{ WebkitBackgroundClip: 'text' }}>
-                  {Math.round(remaining).toLocaleString(lang === 'ar' ? 'ar-EG' : 'fa-IR')}
+                  {formatNumber(Math.round(remaining), lang)}
                 </span>
-                {' '}{lang === 'fa' ? 'امتیاز' : 'نقطة'}
+                {' '}{copy.points}
               </div>
               <div className="text-[clamp(1.05rem,2.8vw,1.4rem)] font-medium leading-normal text-pearl/90">
-                {lang === 'fa' ? 'مانده تا سفیر مروارید کیان‌تیم (۶۰,۰۰۰,۰۰۰)' : 'متبقي للوصول إلى سفير لؤلؤة كيان (60,000,000)'}
+                {copy.remainingTo(safeTarget)}
               </div>
               <div className="text-[clamp(0.9rem,2.4vw,1.15rem)] font-normal leading-normal text-pearl/75 mt-0.5">
-                {lang === 'fa' ? 'سهم تیم تو از این ویژن مشترک چقدره؟!' : 'ما هي حصة فريقك من هذه الرؤية المشتركة؟!'}
+                {copy.shareQuestion}
               </div>
             </motion.div>
           </AnimatePresence>

@@ -1,8 +1,6 @@
 {
   "name": "Kiyan Pearl Ambassador",
-  "description": "",
+  "description": "Live team score counter towards the Kiyan Pearl Ambassador target.",
   "requestFramePermissions": [],
-  "majorCapabilities": [
-    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
-  ]
+  "majorCapabilities": []
 }

@@ -5,4 +5,11 @@ coverage/
 .DS_Store
 *.log
 .env*
-!.env.example
+package-lock.json
+
+# Server secrets — never commit
+kiyan-config.php
+**/kiyan-config.php
+
+# Built bundles uploaded to cPanel
+*.zip

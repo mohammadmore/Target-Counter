@@ -1,27 +1,13 @@
 import { motion, AnimatePresence } from 'motion/react';
-import { useEffect, useState } from 'react';
+import { useAnimatedNumber } from '../hooks/useAnimatedNumber';
+import { formatPercent, type Lang } from '../lib/format';
+import { t } from '../i18n';
 
-export default function ProgressRing({ score, target, lang }: { score: number; target: number, lang: 'fa' | 'ar' }) {
+export default function ProgressRing({ score, target, lang }: { score: number; target: number; lang: Lang }) {
   const R = 85;
   const CIRC = 2 * Math.PI * R;
-  const ratio = Math.max(0, Math.min(score / target, 1));
-  const pct = target > 0 ? (score / target) * 100 : 0;
-  
-  const [displayPct, setDisplayPct] = useState(0);
-
-  useEffect(() => {
-    let start: number | null = null;
-    const duration = 1900;
-    
-    const step = (ts: number) => {
-      if (!start) start = ts;
-      const t = Math.min((ts - start) / duration, 1);
-      const ease = 1 - Math.pow(1 - t, 3);
-      setDisplayPct(pct * ease);
-      if (t < 1) requestAnimationFrame(step);
-    };
-    requestAnimationFrame(step);
-  }, [pct]);
+  const ratio = target > 0 ? Math.max(0, Math.min(score / target, 1)) : 0;
+  const displayPct = useAnimatedNumber(ratio * 100);
 
   const ringText = 'KIYAN PEARL AMBASSADORS • '.repeat(3);
 
@@ -115,21 +101,13 @@ export default function ProgressRing({ score, target, lang }: { score: number; t
             className="relative flex flex-col items-center justify-center mb-[15%]"
           >
             <div className="font-extrabold text-[clamp(2.1rem,7vw,3.4rem)] leading-none text-transparent bg-clip-text bg-gradient-to-b from-gold-2 via-gold-1 to-gold-3" style={{ WebkitBackgroundClip: 'text', direction: 'ltr' }}>
-              {displayPct.toLocaleString(lang === 'ar' ? 'ar-EG' : 'fa-IR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              {formatPercent(displayPct, lang)}
               <span className="text-[0.5em] font-bold">%</span>
             </div>
             <div className="absolute top-[106%] mt-[0.2rem] text-[clamp(1.35rem,2.7vw,1.65rem)] text-gold-2 drop-shadow-sm flex flex-col items-center leading-tight font-extrabold whitespace-nowrap">
-              {lang === 'fa' ? (
-                <>
-                  <span>ســفیر</span>
-                  <span>مروارید</span>
-                </>
-              ) : (
-                <>
-                  <span>سفير</span>
-                  <span>اللؤلؤة</span>
-                </>
-              )}
+              {t(lang).ambassador.map((word) => (
+                <span key={word}>{word}</span>
+              ))}
             </div>
           </motion.div>
         </AnimatePresence>
