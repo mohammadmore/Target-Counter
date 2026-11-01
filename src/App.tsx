@@ -1,237 +1,98 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
+import { lazy, Suspense, useMemo, useState } from 'react';
+import { useGoal } from './hooks/useGoal';
+import { normalizeConfig } from './goal/normalize';
+import { themeStyle } from './goal/theme';
+import { createDefaultConfig } from './goal/presets';
+import { isLang, type Lang } from './lib/format';
+import { hrefFor, navigate, useRoute } from './router';
+import GoalPage from './page/GoalPage';
+import ScoreEditor from './editor/ScoreEditor';
+import { CHROME } from './page/chrome';
+import PreviewHost from './page/PreviewHost';
 
-import { useState, useEffect, useRef } from 'react';
-import Background from './components/Background';
-import MainView from './components/MainView';
-import AdminView from './components/AdminView';
-import { useScore } from './hooks/useScore';
-import { Settings, Camera, Film, WifiOff } from 'lucide-react';
-import { toPng } from 'html-to-image';
-import { AnimatePresence, motion } from 'motion/react';
-import type { Lang } from './lib/format';
-import { t } from './i18n';
+// The studio (dashboard + wizard) is only needed by admins — keep it out of the viewer bundle.
+const Studio = lazy(() => import('./studio/Studio'));
 
-const isIOS = () =>
-  /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.userAgent.includes('Mac') && 'ontouchend' in document);
-
-const initialLang = (): Lang => (new URLSearchParams(window.location.search).get('lang') === 'ar' ? 'ar' : 'fa');
-
-export default function App() {
-  const { score, target, loading, connectionError, save } = useScore();
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [replayKey, setReplayKey] = useState(0);
-  const [isCapturing, setIsCapturing] = useState(false);
-  const [showShutter, setShowShutter] = useState(false);
-  const [showToast, setShowToast] = useState(false);
-  const [shutterMsg, setShutterMsg] = useState('');
-  const [posterUrl, setPosterUrl] = useState<string | null>(null);
-  
-  const [lang, setLang] = useState<Lang>(initialLang);
-  const copy = t(lang);
-  const appRef = useRef<HTMLDivElement>(null);
-  const animationStartTime = useRef(Date.now());
-
-  useEffect(() => {
-    document.documentElement.lang = lang;
-  }, [lang]);
-
-  useEffect(() => {
-    if (!loading) {
-      animationStartTime.current = Date.now();
-    }
-  }, [loading]);
-
-  const toggleLang = () => {
-    const newLang = lang === 'fa' ? 'ar' : 'fa';
-    setLang(newLang);
-    const url = new URL(window.location.href);
-    url.searchParams.set('lang', newLang);
-    window.history.replaceState(null, '', url.toString());
-  };
-
-  const flashMessage = (text: string, withShutter: boolean) => {
-    setShutterMsg(text);
-    setShowShutter(withShutter);
-    setShowToast(true);
-    setTimeout(() => {
-      setShowShutter(false);
-      setShowToast(false);
-    }, 2500);
-  };
-
-  const handleCapture = async () => {
-    if (!appRef.current || isCapturing) return;
-    try {
-      setIsCapturing(true);
-      // Wait for UI to hide buttons before capturing
-      await new Promise(resolve => setTimeout(resolve, 150));
-      
-      const timeElapsed = Date.now() - animationStartTime.current;
-      if (timeElapsed < 2000) {
-        await new Promise(resolve => setTimeout(resolve, 2000 - timeElapsed));
-      }
-      
-      const dataUrl = await toPng(appRef.current, {
-        cacheBust: true,
-        // iOS Safari crashes on very large canvases, so use a lower ratio there.
-        pixelRatio: isIOS() ? 2 : 3,
-        backgroundColor: '#060605',
-      });
-
-      if (isIOS()) {
-        setPosterUrl(dataUrl);
-      } else {
-        const link = document.createElement('a');
-        link.download = 'kianteam-vision.png';
-        link.href = dataUrl;
-        link.click();
-        flashMessage(copy.posterSaved, true);
-      }
-    } catch (err) {
-      console.error('Failed to capture poster:', err);
-      flashMessage(copy.posterFailed, false);
-    } finally {
-      setIsCapturing(false);
-    }
-  };
-
-  const handleReplay = () => {
-    setReplayKey(prev => prev + 1);
-    animationStartTime.current = Date.now();
-  };
-
+function Spinner({ message }: { message?: string }) {
   return (
-    <div ref={appRef} className="relative min-h-[100dvh] text-pearl bg-bg-main font-vazirmatn overflow-x-hidden selection:bg-gold-1/30 selection:text-gold-2" dir="rtl">
-      <Background />
-      
-      <AnimatePresence mode="wait">
-        {loading ? (
-          <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="relative z-40 min-h-[100dvh] flex flex-col gap-4 items-center justify-center" role="status">
-            <div className="w-12 h-12 border-4 border-gold-1/30 border-t-gold-2 rounded-full animate-spin"></div>
-            <p className="text-pearl-dim text-sm">{connectionError ? copy.connectionLost : copy.connecting}</p>
-          </motion.div>
-        ) : isAdmin ? (
-          <motion.div key="admin" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ duration: 0.3 }} className="relative z-40 w-full">
-            <AdminView score={score} target={target} save={save} onBack={() => setIsAdmin(false)} />
-          </motion.div>
-        ) : (
-          <motion.div key={`main-${replayKey}`} initial={{ opacity: 0, scale: 1.02 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 1.02 }} transition={{ duration: 0.4 }} className="relative z-40 w-full">
-            <MainView score={score} target={target} lang={lang} />
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {showShutter && (
-          <motion.div 
-            initial={{ opacity: 0 }} 
-            animate={{ opacity: [1, 0] }} 
-            transition={{ duration: 0.5, ease: "easeOut" }} 
-            className="fixed inset-0 z-[100] bg-white pointer-events-none"
-          />
-        )}
-      </AnimatePresence>
-      <AnimatePresence>
-        {showToast && (
-          <motion.div
-            role="status"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="fixed top-[40px] left-1/2 -translate-x-1/2 z-[101] bg-black/80 border border-gold-1/30 text-gold-2 px-6 py-3 rounded-full font-medium backdrop-blur-md shadow-lg pointer-events-none whitespace-nowrap"
-          >
-            {shutterMsg}
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {connectionError && !loading && !isCapturing && (
-        <div
-          role="status"
-          className="fixed top-3 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-black/75 border border-red-400/40 text-red-200 text-xs px-3 py-1.5 rounded-full backdrop-blur-md"
-        >
-          <WifiOff size={14} />
-          <span>{copy.connectionLost}</span>
-        </div>
-      )}
-
-      {!isAdmin && !isCapturing && !loading && (
-        <div className="fixed bottom-[18px] left-[18px] z-50 flex gap-3">
-          <button 
-            onClick={() => setIsAdmin(true)} 
-            className="w-10 h-10 rounded-full bg-black/50 backdrop-blur-sm border border-gold-1/20 flex items-center justify-center text-gold-2/50 hover:text-gold-2 hover:bg-gold-1/10 transition-all hover:scale-110"
-            title={copy.adminLogin}
-            aria-label={copy.adminLogin}
-          >
-            <Settings size={18} strokeWidth={1.5} />
-          </button>
-          
-          <button 
-            onClick={toggleLang}
-            className="w-10 h-10 rounded-full bg-black/50 backdrop-blur-sm border border-gold-1/20 flex items-center justify-center text-gold-2/50 hover:text-gold-2 hover:bg-gold-1/10 transition-all hover:scale-110 font-bold text-[0.8rem]"
-            title={copy.toggleLang}
-            aria-label={copy.toggleLang}
-          >
-            {lang === 'fa' ? 'AR' : 'FA'}
-          </button>
-          
-          <button 
-            onClick={handleReplay}
-            className="w-10 h-10 rounded-full bg-black/50 backdrop-blur-sm border border-gold-1/20 flex items-center justify-center text-gold-2/50 hover:text-gold-2 hover:bg-gold-1/10 transition-all hover:scale-110"
-            title={copy.replay}
-            aria-label={copy.replay}
-          >
-            <Film size={18} strokeWidth={1.5} />
-          </button>
-
-          <button 
-            onClick={handleCapture}
-            className="w-10 h-10 rounded-full bg-black/50 backdrop-blur-sm border border-gold-1/20 flex items-center justify-center text-gold-2/50 hover:text-gold-2 hover:bg-gold-1/10 transition-all hover:scale-110"
-            title={copy.downloadPoster}
-            aria-label={copy.downloadPoster}
-          >
-            <Camera size={18} strokeWidth={1.5} />
-          </button>
-        </div>
-      )}
-
-      <AnimatePresence>
-        {posterUrl && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] bg-black/90 flex flex-col items-center justify-center p-4 backdrop-blur-sm"
-          >
-            <div className="relative max-w-sm w-full bg-bg-soft border border-gold-1/30 rounded-2xl p-4 flex flex-col items-center gap-4">
-              <button
-                onClick={() => setPosterUrl(null)}
-                aria-label={copy.close}
-                className="absolute top-2 right-3 text-gold-2/60 hover:text-gold-2 text-2xl"
-              >
-                &times;
-              </button>
-              <h3 className="text-gold-2 font-bold text-lg mt-2 text-center">
-                {copy.posterReady}
-              </h3>
-              <p className="text-pearl/70 text-sm text-center">
-                {copy.posterHint}
-              </p>
-              <img src={posterUrl} alt="Poster" className="w-full rounded-lg border border-gold-1/20 shadow-[0_0_15px_rgba(212,175,55,0.2)]" />
-              <button 
-                onClick={() => setPosterUrl(null)}
-                className="w-full py-2.5 mt-2 rounded-xl bg-gold-2 text-bg-main font-bold hover:bg-gold-1 transition-colors"
-              >
-                {copy.close}
-              </button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+    <div className="min-h-[100dvh] flex flex-col gap-4 items-center justify-center bg-bg text-text-muted font-goal" role="status">
+      <div className="w-12 h-12 border-4 border-primary/30 border-t-primary-light rounded-full animate-spin" />
+      {message && <p className="text-sm">{message}</p>}
     </div>
   );
 }
 
+function GoalRoute({ slug, edit }: { slug: string | null; edit: boolean }) {
+  const { goal, status, connectionError, saveScore } = useGoal(slug);
+  // Re-normalize only when the stored config actually changes (not on every score poll).
+  const configKey = goal ? JSON.stringify(goal.config) : null;
+  const config = useMemo(() => (configKey === null ? null : normalizeConfig(JSON.parse(configKey))), [configKey]);
+  const [langOverride, setLangOverride] = useState<Lang | null>(() => {
+    const q = new URLSearchParams(window.location.search).get('lang');
+    return isLang(q) ? q : null;
+  });
+
+  if (status === 'not_found') {
+    const fallback = createDefaultConfig();
+    const chrome = CHROME.fa;
+    return (
+      <div style={themeStyle(fallback)} dir="rtl" className="min-h-[100dvh] flex flex-col gap-4 items-center justify-center bg-bg text-text font-goal">
+        <p className="text-lg">{slug ? chrome.notFound : chrome.noGoals}</p>
+        <a href={hrefFor({ kind: 'studio' })} className="px-5 py-2 rounded-full border border-primary/40 text-primary-light hover:bg-primary/10">
+          {chrome.openStudio}
+        </a>
+      </div>
+    );
+  }
+
+  if (!goal || !config) {
+    return <Spinner message={status === 'error' ? CHROME.fa.connectionLost : CHROME.fa.connecting} />;
+  }
+
+  const lang = langOverride && config.languages.includes(langOverride) ? langOverride : config.defaultLang;
+  const goalRoute = { kind: 'goal' as const, slug: slug ?? goal.slug };
+
+  if (edit) {
+    return (
+      <div style={themeStyle(config)} dir="rtl" className="relative min-h-[100dvh] bg-bg text-text font-goal">
+        <ScoreEditor
+          goal={goal}
+          goalName={config.name}
+          save={saveScore}
+          onBack={() => navigate({ ...goalRoute, edit: false })}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <GoalPage
+      config={config}
+      score={goal.score}
+      target={goal.target}
+      lang={lang}
+      connectionError={connectionError}
+      onLangChange={(next) => {
+        setLangOverride(next);
+        const url = new URL(window.location.href);
+        url.searchParams.set('lang', next);
+        window.history.replaceState(null, '', url.toString());
+      }}
+      onOpenEditor={() => navigate({ ...goalRoute, edit: true })}
+    />
+  );
+}
+
+export default function App() {
+  const route = useRoute();
+
+  if (route.kind === 'preview') return <PreviewHost />;
+  if (route.kind === 'goal') {
+    return <GoalRoute key={`${route.slug}`} slug={route.slug} edit={route.edit} />;
+  }
+  return (
+    <Suspense fallback={<Spinner />}>
+      <Studio route={route} />
+    </Suspense>
+  );
+}

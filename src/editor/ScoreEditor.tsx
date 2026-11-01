@@ -1,36 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent, PointerEvent } from 'react';
 import { motion } from 'motion/react';
-import { api, ApiError, type ScoreData } from '../lib/api';
+import { api, ApiError, ERROR_MESSAGES, clearToken, loadToken, messageFor, storeToken, type GoalPayload } from '../lib/api';
 import { formatNumber, fromDigits, parseWholeNumber, toDigits } from '../lib/format';
-import { MAX_DIGITS, MAX_VALUE } from '../config';
+import { MAX_VALUE } from '../config';
 
-const TOKEN_KEY = 'kianteam_admin_token';
 const DRAG_STEP_PX = 20;
 
-const ERROR_MESSAGES: Record<string, string> = {
-  invalid_password: 'رمز عبور اشتباه است.',
-  too_many_attempts: 'تعداد تلاش‌های ناموفق زیاد بود. ۱۵ دقیقه دیگر دوباره امتحان کنید.',
-  unauthorized: 'نشست شما منقضی شده است. لطفاً دوباره وارد شوید.',
-  invalid_score: 'امتیاز وارد شده معتبر نیست.',
-  invalid_target: `هدف باید عددی بین ۱ و ${formatNumber(MAX_VALUE, 'fa')} باشد.`,
-  score_exceeds_target: 'امتیاز نمی‌تواند بیشتر از هدف باشد.',
-  not_configured: 'سرور هنوز پیکربندی نشده است (فایل kiyan-config.php).',
-  unavailable: 'ارتباط با سرور برقرار نشد. اتصال اینترنت را بررسی کنید.',
-  server_error: 'خطای سرور؛ تغییرات ذخیره نشد.',
-};
-
-const messageFor = (err: unknown) =>
-  (err instanceof ApiError && ERROR_MESSAGES[err.code]) || 'خطای ناشناخته؛ تغییرات ذخیره نشد.';
-
-function loadToken(): string | null {
-  try {
-    const stored = JSON.parse(sessionStorage.getItem(TOKEN_KEY) ?? 'null');
-    if (stored?.token && stored.expiresAt * 1000 > Date.now()) return stored.token;
-  } catch { /* ignore */ }
-  sessionStorage.removeItem(TOKEN_KEY);
-  return null;
-}
+const digitCount = (n: number) => Math.max(1, String(Math.max(0, Math.floor(n))).length);
 
 // ---------------------------------------------------------------------------
 // Digit wheel
@@ -40,11 +17,13 @@ function DigitWheel({
   onChange,
   colorClass,
   label,
+  narrow,
 }: {
   value: number;
   onChange: (v: number) => void;
   colorClass: string;
   label: string;
+  narrow?: boolean;
 }) {
   const [rotation, setRotation] = useState(value);
   const dragStart = useRef<number | null>(null);
@@ -93,7 +72,7 @@ function DigitWheel({
       aria-valuenow={value}
       aria-valuemin={0}
       aria-valuemax={9}
-      className={`relative flex flex-col items-center justify-center bg-black/60 border rounded-lg mx-[1px] w-9 sm:w-[2.75rem] h-[6.5rem] select-none cursor-ns-resize overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-2 ${colorClass}`}
+      className={`relative flex flex-col items-center justify-center bg-bg/80 border rounded-lg mx-[1px] ${narrow ? 'w-[1.45rem] sm:w-8 text-[0.85em]' : 'w-9 sm:w-[2.75rem]'} h-[6.5rem] select-none cursor-ns-resize overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-light ${colorClass}`}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={endDrag}
@@ -140,29 +119,34 @@ function DigitWheel({
   );
 }
 
-const wheelColor = (i: number) => {
-  if (i < 2) return 'border-gold-1 text-gold-2 shadow-[0_0_8px_rgba(212,175,55,0.15)]'; // millions
-  if (i < 5) return 'border-slate-300 text-slate-200 shadow-[0_0_8px_rgba(203,213,225,0.1)]'; // thousands
-  return 'border-amber-600 text-amber-500 shadow-[0_0_8px_rgba(217,119,6,0.15)]'; // units
+/** Colour groups of three digits from the right, using the goal's palette. */
+const wheelColor = (i: number, total: number) => {
+  const group = Math.floor((total - 1 - i) / 3);
+  if (group === 0) return 'border-primary-dark text-primary-dark';
+  if (group === 1) return 'border-text-muted text-text';
+  return 'border-primary text-primary-light';
 };
 
 // ---------------------------------------------------------------------------
 // Admin view
 // ---------------------------------------------------------------------------
-interface AdminViewProps {
-  score: number;
-  target: number;
-  save: (token: string, update: ScoreData) => Promise<ScoreData>;
+interface ScoreEditorProps {
+  goal: GoalPayload;
+  goalName: string;
+  save: (token: string, update: { score: number; target?: number }) => Promise<GoalPayload>;
   onBack: () => void;
 }
 
-export default function AdminView({ score, target, save, onBack }: AdminViewProps) {
-  const [token, setToken] = useState<string | null>(loadToken);
+/** Score editor for one goal. Accepts the goal's editor password or the platform password. */
+export default function ScoreEditor({ goal, goalName, save, onBack }: ScoreEditorProps) {
+  const { score, target, slug } = goal;
+  const [token, setToken] = useState<string | null>(() => loadToken('platform') ?? loadToken(slug));
   const [password, setPassword] = useState('');
   const [loggingIn, setLoggingIn] = useState(false);
   const [pwError, setPwError] = useState('');
 
-  const [digits, setDigits] = useState(() => toDigits(score));
+  const wheels = Math.max(digitCount(target), digitCount(score));
+  const [digits, setDigits] = useState(() => toDigits(score, wheels));
   const [scoreText, setScoreText] = useState(() => String(score));
   const [targetText, setTargetText] = useState(() => String(target));
   const [dirty, setDirty] = useState(false);
@@ -173,10 +157,10 @@ export default function AdminView({ score, target, save, onBack }: AdminViewProp
   // Follow live server values only while the admin hasn't started editing.
   useEffect(() => {
     if (dirty) return;
-    setDigits(toDigits(score));
+    setDigits(toDigits(score, wheels));
     setScoreText(String(score));
     setTargetText(String(target));
-  }, [score, target, dirty]);
+  }, [score, target, dirty, wheels]);
 
   useEffect(() => () => clearTimeout(messageTimer.current), []);
 
@@ -187,7 +171,8 @@ export default function AdminView({ score, target, save, onBack }: AdminViewProp
   };
 
   const logout = () => {
-    sessionStorage.removeItem(TOKEN_KEY);
+    clearToken('platform');
+    clearToken(slug);
     setToken(null);
   };
 
@@ -196,8 +181,8 @@ export default function AdminView({ score, target, save, onBack }: AdminViewProp
     setLoggingIn(true);
     setPwError('');
     try {
-      const result = await api.login(password);
-      sessionStorage.setItem(TOKEN_KEY, JSON.stringify(result));
+      const result = await api.login(password, slug);
+      storeToken(result.scope === 'platform' ? 'platform' : slug, result);
       setToken(result.token);
       setPassword('');
     } catch (err) {
@@ -223,7 +208,7 @@ export default function AdminView({ score, target, save, onBack }: AdminViewProp
     setScoreText(text);
     setDirty(true);
     const parsed = parseWholeNumber(text);
-    if (parsed !== null && parsed <= MAX_VALUE) setDigits(toDigits(parsed));
+    if (parsed !== null && parsed <= MAX_VALUE) setDigits(toDigits(parsed, Math.max(wheels, digitCount(parsed))));
   };
 
   const handleSave = async () => {
@@ -267,14 +252,15 @@ export default function AdminView({ score, target, save, onBack }: AdminViewProp
     return (
       <div className="relative z-40 min-h-[100dvh] flex items-center justify-center px-[6vw] py-[6vh]">
         <form
-          className="w-[min(92vw,380px)] bg-black/70 border border-gold-1/25 rounded-[10px] p-[clamp(1.6rem,4vw,2.4rem)] backdrop-blur-md"
+          className="w-[min(92vw,380px)] bg-surface/80 border border-primary/25 rounded-[10px] p-[clamp(1.6rem,4vw,2.4rem)] backdrop-blur-md"
           onSubmit={(e) => {
             e.preventDefault();
             tryLogin();
           }}
         >
-          <div className="text-[1.05rem] font-bold text-gold-2 mb-[1.4rem]">ورود مدیر سیستم</div>
-          <p className="text-[0.85rem] text-pearl-dim mb-4 leading-relaxed">برای ویرایش امتیازات، رمز عبور مدیریت را وارد کنید.</p>
+          <div className="text-[1.05rem] font-bold text-primary-light mb-1">ثبت امتیاز</div>
+          <div className="text-[0.85rem] text-text mb-[1.2rem]">{goalName}</div>
+          <p className="text-[0.85rem] text-text-muted mb-4 leading-relaxed">رمز ویرایشگر این صفحه یا رمز مدیر پلتفرم را وارد کنید.</p>
 
           <input
             type="password"
@@ -285,7 +271,7 @@ export default function AdminView({ score, target, save, onBack }: AdminViewProp
             }}
             autoComplete="current-password"
             aria-label="رمز عبور"
-            className="w-full p-[0.7rem_0.9rem] mb-[1rem] bg-[#100f0c] border border-gold-1/30 rounded-[6px] text-pearl text-[1rem] dir-ltr text-right focus:outline-none focus:border-gold-1"
+            className="w-full p-[0.7rem_0.9rem] mb-[1rem] bg-bg border border-primary/30 rounded-[6px] text-text text-[1rem] dir-ltr text-right focus:outline-none focus:border-primary"
             placeholder="رمز عبور را وارد کنید"
             autoFocus
           />
@@ -296,7 +282,7 @@ export default function AdminView({ score, target, save, onBack }: AdminViewProp
           <button
             type="submit"
             disabled={loggingIn || !password}
-            className="w-full flex items-center justify-center gap-2 p-[0.75rem_1rem] border-none rounded-[6px] bg-gradient-to-b from-gold-2 to-gold-1 text-[#1a1408] font-bold text-[0.95rem] cursor-pointer transition-all hover:brightness-110 disabled:opacity-60 disabled:cursor-not-allowed"
+            className="w-full flex items-center justify-center gap-2 p-[0.75rem_1rem] border-none rounded-[6px] bg-gradient-to-b from-primary-light to-primary text-bg font-bold text-[0.95rem] cursor-pointer transition-all hover:brightness-110 disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {loggingIn ? 'در حال بررسی…' : 'ورود'}
           </button>
@@ -304,7 +290,7 @@ export default function AdminView({ score, target, save, onBack }: AdminViewProp
           <button
             type="button"
             onClick={onBack}
-            className="block mt-[1.3rem] text-[0.82rem] text-pearl-dim decoration-dotted border-b border-pearl-dim/35 hover:text-gold-2 text-center w-full"
+            className="block mt-[1.3rem] text-[0.82rem] text-text-muted decoration-dotted border-b border-text-muted/35 hover:text-primary-light text-center w-full"
           >
             بازگشت به صفحه اصلی
           </button>
@@ -316,17 +302,20 @@ export default function AdminView({ score, target, save, onBack }: AdminViewProp
   const previewTarget = editedTarget && editedTarget > 0 ? editedTarget : target;
   const currentPct = previewTarget > 0 ? (editedScore / previewTarget) * 100 : 0;
   const inputClass =
-    'w-full p-[0.55rem_0.8rem] bg-[#100f0c] border border-gold-1/30 rounded-[6px] text-pearl text-[0.95rem] dir-ltr text-center focus:outline-none focus:border-gold-1';
+    'w-full p-[0.55rem_0.8rem] bg-bg border border-primary/30 rounded-[6px] text-text text-[0.95rem] dir-ltr text-center focus:outline-none focus:border-primary';
 
   return (
     <div className="relative z-40 min-h-[100dvh] flex items-center justify-center px-[4vw] py-[6vh]">
-      <div className="w-[min(95vw,420px)] bg-black/70 border border-gold-1/25 rounded-[10px] p-[clamp(1.2rem,4vw,2rem)] backdrop-blur-md">
+      <div className="w-[min(95vw,420px)] bg-surface/80 border border-primary/25 rounded-[10px] p-[clamp(1.2rem,4vw,2rem)] backdrop-blur-md">
         <div className="flex justify-center items-center mb-[1.4rem]">
-          <div className="text-[1.15rem] font-bold text-gold-2">پنل مدیریت امتیاز</div>
+          <div className="text-center">
+            <div className="text-[1.15rem] font-bold text-primary-light">پنل ثبت امتیاز</div>
+            <div className="text-[0.8rem] text-text-muted mt-1">{goalName}</div>
+          </div>
         </div>
 
-        <label className="block text-[0.85rem] text-pearl-dim mb-[1rem] text-center">
-          تنظیم دقیق امتیاز ({formatNumber(MAX_DIGITS, 'fa')} رقم) — بکشید یا با کلیدهای ↑↓ تغییر دهید
+        <label className="block text-[0.85rem] text-text-muted mb-[1rem] text-center">
+          تنظیم دقیق امتیاز — بکشید یا با کلیدهای ↑↓ تغییر دهید
         </label>
 
         <div className="flex justify-center items-center gap-[2px] sm:gap-1 mb-4 dir-ltr">
@@ -335,14 +324,15 @@ export default function AdminView({ score, target, save, onBack }: AdminViewProp
               key={i}
               value={digit}
               onChange={(v) => handleDigitChange(i, v)}
-              colorClass={wheelColor(i)}
+              colorClass={wheelColor(i, digits.length)}
+              narrow={digits.length > 9}
               label={`رقم ${formatNumber(i + 1, 'fa')}`}
             />
           ))}
         </div>
 
         <div className="grid grid-cols-2 gap-3 mb-4">
-          <label className="text-[0.78rem] text-pearl-dim">
+          <label className="text-[0.78rem] text-text-muted">
             <span className="block mb-1">یا امتیاز را تایپ کنید</span>
             <input
               inputMode="numeric"
@@ -351,7 +341,7 @@ export default function AdminView({ score, target, save, onBack }: AdminViewProp
               className={inputClass}
             />
           </label>
-          <label className="text-[0.78rem] text-pearl-dim">
+          <label className="text-[0.78rem] text-text-muted">
             <span className="block mb-1">هدف (تارگت)</span>
             <input
               inputMode="numeric"
@@ -367,14 +357,14 @@ export default function AdminView({ score, target, save, onBack }: AdminViewProp
 
         <div className="text-center min-h-[1.2em] mb-[1rem]" role="status" aria-live="polite">
           {message && (
-            <span className={`text-[0.82rem] ${message.kind === 'error' ? 'text-red-400' : 'text-gold-2'}`}>{message.text}</span>
+            <span className={`text-[0.82rem] ${message.kind === 'error' ? 'text-red-400' : 'text-primary-light'}`}>{message.text}</span>
           )}
         </div>
 
         <button
           onClick={handleSave}
           disabled={saving || !dirty}
-          className="w-full p-[0.75rem_1rem] border-none rounded-[6px] bg-gradient-to-b from-gold-2 to-gold-1 text-[#1a1408] font-bold text-[0.95rem] cursor-pointer transition-all hover:brightness-110 disabled:opacity-60 disabled:cursor-not-allowed"
+          className="w-full p-[0.75rem_1rem] border-none rounded-[6px] bg-gradient-to-b from-primary-light to-primary text-bg font-bold text-[0.95rem] cursor-pointer transition-all hover:brightness-110 disabled:opacity-60 disabled:cursor-not-allowed"
         >
           {saving ? 'در حال ذخیره…' : 'ذخیره تغییرات در دیتابیس'}
         </button>
@@ -382,7 +372,7 @@ export default function AdminView({ score, target, save, onBack }: AdminViewProp
         {dirty && !saving && (
           <button
             onClick={handleDiscard}
-            className="w-full mt-[0.7rem] p-[0.6rem_1rem] rounded-[6px] bg-transparent text-pearl-dim text-[0.85rem] cursor-pointer hover:text-gold-2"
+            className="w-full mt-[0.7rem] p-[0.6rem_1rem] rounded-[6px] bg-transparent text-text-muted text-[0.85rem] cursor-pointer hover:text-primary-light"
           >
             لغو تغییرات و نمایش مقدار سرور
           </button>
@@ -390,29 +380,29 @@ export default function AdminView({ score, target, save, onBack }: AdminViewProp
 
         <button
           onClick={logout}
-          className="w-full mt-[0.7rem] p-[0.75rem_1rem] border border-gold-1/35 rounded-[6px] bg-transparent text-pearl-dim font-bold text-[0.95rem] cursor-pointer hover:bg-white/5"
+          className="w-full mt-[0.7rem] p-[0.75rem_1rem] border border-primary/35 rounded-[6px] bg-transparent text-text-muted font-bold text-[0.95rem] cursor-pointer hover:bg-white/5"
         >
           خروج از پنل
         </button>
 
-        <div className="flex justify-between text-[0.85rem] text-pearl-dim border-t border-dashed border-gold-1/20 pt-[0.9rem] mt-[1rem]">
+        <div className="flex justify-between text-[0.85rem] text-text-muted border-t border-dashed border-primary/20 pt-[0.9rem] mt-[1rem]">
           <span>امتیاز فعلی سرور</span>
-          <b className="text-gold-2 font-bold dir-ltr unicode-bidi-plaintext">{formatNumber(score, 'fa')}</b>
+          <b className="text-primary-light font-bold dir-ltr unicode-bidi-plaintext">{formatNumber(score, 'fa')}</b>
         </div>
-        <div className="flex justify-between text-[0.85rem] text-pearl-dim border-t border-dashed border-gold-1/20 pt-[0.9rem] mt-[0.3rem]">
+        <div className="flex justify-between text-[0.85rem] text-text-muted border-t border-dashed border-primary/20 pt-[0.9rem] mt-[0.3rem]">
           <span>هدف فعلی سرور</span>
-          <b className="text-gold-2 font-bold dir-ltr unicode-bidi-plaintext">{formatNumber(target, 'fa')}</b>
+          <b className="text-primary-light font-bold dir-ltr unicode-bidi-plaintext">{formatNumber(target, 'fa')}</b>
         </div>
-        <div className="flex justify-between text-[0.85rem] text-pearl-dim border-t border-dashed border-gold-1/20 pt-[0.9rem] mt-[0.3rem]">
+        <div className="flex justify-between text-[0.85rem] text-text-muted border-t border-dashed border-primary/20 pt-[0.9rem] mt-[0.3rem]">
           <span>درصد با این عدد</span>
-          <b className="text-gold-2 font-bold dir-ltr unicode-bidi-plaintext">
+          <b className="text-primary-light font-bold dir-ltr unicode-bidi-plaintext">
             {formatNumber(currentPct, 'fa', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}٪
           </b>
         </div>
 
         <button
           onClick={onBack}
-          className="block w-full mt-[1.3rem] text-[0.82rem] text-pearl-dim decoration-dotted border-b border-pearl-dim/35 hover:text-gold-2 text-center pb-1"
+          className="block w-full mt-[1.3rem] text-[0.82rem] text-text-muted decoration-dotted border-b border-text-muted/35 hover:text-primary-light text-center pb-1"
         >
           مشاهده صفحه اصلی
         </button>

@@ -1,8 +1,13 @@
 import { MAX_DIGITS } from '../config';
 
-export type Lang = 'fa' | 'ar';
+export type Lang = 'fa' | 'ar' | 'en';
 
-export const localeOf = (lang: Lang) => (lang === 'ar' ? 'ar-EG' : 'fa-IR');
+export const LANGS: Lang[] = ['fa', 'ar', 'en'];
+
+const LOCALES: Record<Lang, string> = { fa: 'fa-IR', ar: 'ar-EG', en: 'en-US' };
+export const localeOf = (lang: Lang) => LOCALES[lang];
+export const dirOf = (lang: Lang) => (lang === 'en' ? 'ltr' : 'rtl');
+export const isLang = (value: unknown): value is Lang => value === 'fa' || value === 'ar' || value === 'en';
 
 export function formatNumber(value: number, lang: Lang, options?: Intl.NumberFormatOptions) {
   return value.toLocaleString(localeOf(lang), options);
@@ -35,7 +40,12 @@ export function parseWholeNumber(input: string): number | null {
   return Number.isSafeInteger(value) ? value : null;
 }
 
-/** 1234 -> [0,0,0,0,1,2,3,4] (always MAX_DIGITS long). */
+/** Replaces {name} placeholders; unknown names are left untouched. */
+export function fillTemplate(template: string, vars: Record<string, string>) {
+  return template.replace(/\{(\w+)\}/g, (match, key: string) => (key in vars ? vars[key] : match));
+}
+
+/** 1234 -> [0,0,0,0,1,2,3,4] (always `length` long). */
 export function toDigits(value: number, length = MAX_DIGITS): number[] {
   return String(Math.max(0, Math.floor(value))).padStart(length, '0').slice(-length).split('').map(Number);
 }

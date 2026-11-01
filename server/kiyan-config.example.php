@@ -16,7 +16,7 @@ return [
     'db_pass' => 'CHANGE_ME',
     'db_name' => 'CHANGE_ME',
 
-    // Admin password. Preferred: a hash generated with
+    // Platform (studio) admin password. Preferred: a hash generated with
     //   php -r "echo password_hash('your-password', PASSWORD_DEFAULT), PHP_EOL;"
     'admin_password_hash' => '',
     // Fallback if you cannot run PHP from a shell (leave empty when using the hash):
